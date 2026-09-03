@@ -1,0 +1,8 @@
+packages:
+  - "clients/*"
+  - "services/*"
+  - "packages/*"
+
+ignoredBuiltDependencies:
+  - sharp
+  - unrs-resolver

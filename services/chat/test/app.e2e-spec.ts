@@ -1,0 +1,36 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { INestApplication } from '@nestjs/common';
+import request from 'supertest';
+import { AppModule } from './../src/app.module.js';
+import { APP_NAME } from '@autix/contracts';
+
+describe('AppController (e2e)', () => {
+  let app: INestApplication;
+
+  beforeEach(async () => {
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+
+    app = moduleFixture.createNestApplication();
+    await app.init();
+  });
+
+  it('/health (GET)', () => {
+    return request(app.getHttpServer())
+      .get('/health')
+      .expect(200)
+      .expect({ ok: true });
+  });
+
+  it('/hello (GET)', () => {
+    return request(app.getHttpServer())
+      .get('/hello')
+      .expect(200)
+      .expect({ message: `Hello from Chat, shared APP_NAME=${APP_NAME}` });
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+});

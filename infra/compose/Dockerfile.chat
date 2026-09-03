@@ -1,0 +1,36 @@
+FROM node:22-alpine AS builder
+
+WORKDIR /app
+
+RUN corepack enable && corepack prepare pnpm@10.12.1 --activate
+
+# 复制 workspace 配置与 lockfile
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.json ./
+COPY packages/contracts/package.json ./packages/contracts/
+COPY services/chat/package.json ./services/chat/
+COPY clients/chat-web/package.json ./clients/chat-web/
+
+# 安装所有依赖
+RUN pnpm install --frozen-lockfile
+
+# 复制源码
+COPY packages/contracts ./packages/contracts
+COPY services/chat ./services/chat
+
+# 构建共享包与后端服务
+RUN pnpm run build --filter=@autix/contracts --filter=@autix/chat
+
+FROM node:22-alpine AS runner
+
+WORKDIR /app
+
+RUN corepack enable && corepack prepare pnpm@10.12.1 --activate
+
+ENV NODE_ENV=production
+ENV PORT=4001
+
+COPY --from=builder /app /app
+
+EXPOSE 4001
+
+CMD ["pnpm", "--filter", "@autix/chat", "start:prod"]

@@ -1,0 +1,43 @@
+FROM node:22-alpine AS builder
+
+WORKDIR /app
+
+RUN corepack enable && corepack prepare pnpm@10.12.1 --activate
+
+# 复制 workspace 配置与 lockfile
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.json ./
+COPY packages/contracts/package.json ./packages/contracts/
+COPY clients/chat-web/package.json ./clients/chat-web/
+COPY services/chat/package.json ./services/chat/
+
+# 安装依赖
+RUN pnpm install --frozen-lockfile
+
+# 复制源码
+COPY packages/contracts ./packages/contracts
+COPY clients/chat-web ./clients/chat-web
+
+ENV NEXT_TELEMETRY_DISABLED=1
+ARG NEXT_PUBLIC_API_BASE_URL=http://localhost:4001
+ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
+
+# 编译构建
+RUN pnpm run build --filter=@autix/contracts --filter=@autix/chat-web
+
+FROM node:22-alpine AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3002
+ENV HOSTNAME="0.0.0.0"
+
+# 复制 standalone 产物与静态资源
+COPY --from=builder /app/clients/chat-web/.next/standalone ./
+COPY --from=builder /app/clients/chat-web/.next/static ./clients/chat-web/.next/static
+COPY --from=builder /app/clients/chat-web/public ./clients/chat-web/public
+
+EXPOSE 3002
+
+CMD ["node", "clients/chat-web/server.js"]
