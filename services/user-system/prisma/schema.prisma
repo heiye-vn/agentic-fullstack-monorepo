@@ -1,0 +1,216 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 状态枚举
+enum CommonStatus {
+  ACTIVE
+  DISABLED
+}
+
+// 权限类型枚举
+enum PermissionType {
+  CATALOG // 目录
+  MENU    // 菜单路由
+  BUTTON  // 按钮/操作权限
+  API     // 纯后端接口权限
+}
+
+// 审计状态枚举
+enum AuditStatus {
+  SUCCESS
+  FAIL
+}
+
+// 1. 部门 / 组织架构表
+model Department {
+  id          String       @id @default(cuid())
+  name        String       // 部门名称
+  code        String       @unique // 部门标识
+  parentId    String?      // 父级部门 ID
+  sortOrder   Int          @default(0) // 排序号
+  leader      String?      // 负责人
+  phone       String?      // 联系电话
+  status      CommonStatus @default(ACTIVE)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  deletedAt   DateTime?    // 软删除标记
+
+  // 自关联树形结构
+  parent      Department?  @relation("DeptToSubDept", fields: [parentId], references: [id], onDelete: Cascade)
+  children    Department[] @relation("DeptToSubDept")
+
+  // 部门下属用户
+  users       User[]
+
+  @@index([parentId])
+  @@index([status])
+  @@map("departments")
+}
+
+// 2. 用户表
+model User {
+  id             String         @id @default(cuid())
+  username       String         @unique // 登录账号
+  passwordHash   String         // 散列哈希密码 (Argon2id)
+  realName       String?        // 真实姓名
+  email          String?        // 邮箱
+  phone          String?        // 手机号
+  avatar         String?        // 头像 URL
+  status         CommonStatus   @default(ACTIVE)
+  departmentId   String?        // 所属部门 ID
+  tokenVersion   Int            @default(0) // 凭证版本号，权限修改时递增以使旧 Token 懒失效
+  lastLoginAt    DateTime?      // 上次登录时间
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  deletedAt      DateTime?      // 软删除标记
+
+  // 所属部门
+  department     Department?    @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  // 关联角色
+  userRoles      UserRole[]
+
+  // 会话凭据与刷新 Token
+  refreshTokens  RefreshToken[]
+
+  // 操作审计日志
+  operationLogs  OperationLog[]
+
+  @@index([username])
+  @@index([departmentId])
+  @@index([status])
+  @@map("users")
+}
+
+// 3. 角色表
+model Role {
+  id              String           @id @default(cuid())
+  name            String           // 角色名称 (如：超级管理员、财务主管)
+  code            String           @unique // 角色编码 (如：super_admin, finance_manager)
+  description     String?          // 角色描述
+  sortOrder       Int              @default(0) // 排序号
+  status          CommonStatus     @default(ACTIVE)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  deletedAt       DateTime?        // 软删除标记
+
+  // 关联用户与权限
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+
+  @@index([code])
+  @@map("roles")
+}
+
+// 4. 权限资源表 (页面、按钮、API)
+model Permission {
+  id              String           @id @default(cuid())
+  parentId        String?          // 父级权限 ID
+  name            String           // 权限名称 (如：用户删除)
+  code            String           @unique // 权限标识符 (如：sys:user:delete)
+  type            PermissionType   // 权限类型
+  path            String?          // 路由路径 (菜单项使用)
+  component       String?          // 前端组件路径
+  icon            String?          // 图标标识
+  sortOrder       Int              @default(0) // 排序号
+  status          CommonStatus     @default(ACTIVE)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  // 自关联父子树
+  parent          Permission?      @relation("PermissionToSub", fields: [parentId], references: [id], onDelete: Cascade)
+  children        Permission[]     @relation("PermissionToSub")
+
+  // 关联角色
+  rolePermissions RolePermission[]
+
+  @@index([parentId])
+  @@index([code])
+  @@map("permissions")
+}
+
+// 5. 用户 - 角色多对多中间表
+model UserRole {
+  userId     String
+  roleId     String
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+// 6. 角色 - 权限多对多中间表
+model RolePermission {
+  roleId       String
+  permissionId String
+  createdAt    DateTime   @default(now())
+
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// 7. Refresh Token 凭证管理表
+model RefreshToken {
+  id         String    @id @default(cuid())
+  userId     String    // 归属用户
+  tokenHash  String    @unique // SHA256 哈希值
+  deviceId   String?   // 设备标识 / User-Agent 摘要
+  expiresAt  DateTime  // 过期时间
+  revokedAt  DateTime? // 吊销时间 (为 null 表示有效)
+  createdAt  DateTime  @default(now())
+
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("refresh_tokens")
+}
+
+// 8. 登录审计日志表
+model LoginLog {
+  id        String      @id @default(cuid())
+  username  String      // 登录用户名
+  ip        String?     // 客户端 IP
+  userAgent String?     // 客户端 User-Agent
+  status    AuditStatus // 登录结果 (SUCCESS/FAIL)
+  message   String?     // 状态描述或失败原因
+  loginAt   DateTime    @default(now()) // 登录时间戳
+
+  @@index([username])
+  @@index([loginAt])
+  @@map("login_logs")
+}
+
+// 9. 操作审计日志表
+model OperationLog {
+  id           String      @id @default(cuid())
+  userId       String?     // 操作人 ID
+  username     String?     // 操作人账号
+  module       String      // 业务模块 (如: 用户管理, 角色管理)
+  action       String      // 动作描述 (如: 删除用户, 修改角色权限)
+  method       String      // HTTP Method (POST, PUT, DELETE...)
+  path         String      // 请求 URL 路径
+  params       String?     // 序列化入参 (脱敏后 JSON 文本)
+  status       AuditStatus // 执行状态
+  duration     Int         // 执行耗时 (ms)
+  errorMessage String?     // 异常堆栈摘要
+  createdAt    DateTime    @default(now()) // 操作时间
+
+  user         User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("operation_logs")
+}

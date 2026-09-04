@@ -131,3 +131,39 @@ docker compose -f infra/compose/compose.yaml up --build
 ```bash
 docker compose -f infra/compose/compose.dev.yaml up
 ```
+
+---
+
+## 🔐 Chapter 02: RBAC 权限管控系统
+
+本项目在第二阶段集成了企业级 RBAC（基于角色的访问控制）权限管理系统，涵盖前后端全链路安全鉴权闭环。
+
+### 模块架构
+- **后端服务**：[`services/user-system`](file:///d:/ZSP/Study/Ai%20Agent/agentic-fullstack-monorepo/services/user-system)（NestJS + Prisma + PostgreSQL，端口 `4002`）
+- **管理前端**：[`clients/admin-web`](file:///d:/ZSP/Study/Ai%20Agent/agentic-fullstack-monorepo/clients/admin-web)（Next.js 16 + HeroUI + Tailwind 4 + Proxy，端口 `3003`）
+
+### 快速启动 RBAC 全套系统
+```bash
+# 1. 启动本地 PostgreSQL 容器
+docker compose -f infra/compose/compose.dev.yaml up -d postgres
+
+# 2. 数据库迁移与种子数据灌入 (自动创建组织、角色、权限树与初始账号)
+pnpm --filter @autix/user-system prisma:seed
+
+# 3. 一键并发启动 RBAC 前后端
+pnpm dev:rbac
+```
+
+### 预设测试账号与角色
+| 账号 | 密码 | 角色 | 权限范围 |
+| :--- | :--- | :--- | :--- |
+| `admin` | `Admin123!` | `super_admin` | 全局完全支配权限（包含 `*:*:*` 与旁路放行），防删除锁定 |
+| `test_ops` | `Admin123!` | `admin` | 系统运维主管，拥有除超级权限外的全量业务管理与配置权限 |
+| `test_user` | `User123!` | `general_user` | 普通员工，仅具备基础菜单与列表查询权限（写操作受 403 严格拦截） |
+
+### 核心安全机制
+- **双 Token 自动轮转**：短效 Access Token (15m) + 长效 Refresh Token (7d)，支持重放攻击拦截与即时吊销。
+- **动态权限即时失效**：依托 `User.tokenVersion` 机制，管理员调整用户权限/角色后毫秒级阻断旧凭据。
+- **Next.js 16 Proxy**：采用 Next.js 16 规范的 `proxy.ts` 流量代理边界进行前端路由拦截与安全控制。
+- **全链路审计追踪**：集成 `LoginLog` 登录流水与 `OperationLog` 细粒度操作审计（含入参敏感信息脱敏）。
+
