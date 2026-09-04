@@ -7,6 +7,9 @@
     "dev": "turbo dev",
     "dev:chat-web": "pnpm --filter @autix/chat-web dev",
     "dev:chat": "pnpm --filter @autix/chat dev",
+    "dev:user-system": "pnpm --filter @autix/user-system dev",
+    "dev:admin-web": "pnpm --filter @autix/admin-web dev",
+    "dev:rbac": "turbo run dev --filter=@autix/user-system --filter=@autix/admin-web",
     "build": "turbo build",
     "typecheck": "turbo typecheck"
   },
