@@ -3,24 +3,20 @@
 import React, { useState, useEffect } from 'react';
 import {
   UserCog,
-  Shield,
   KeyRound,
   CheckCircle2,
   XCircle,
-  Building2,
   Mail,
   Phone,
-  Clock,
   Fingerprint,
   Save,
-  Lock,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { apiClient } from '@/lib/api-client';
 import { RightDrawer } from '@/components/common/right-drawer';
 
 export default function ProfilePage() {
-  const { user, updateUser, fetchProfileAndPermissions } = useAuthStore();
+  const { user, updateUser, fetchProfileAndPermissions, logout } = useAuthStore();
 
   const [realName, setRealName] = useState('');
   const [email, setEmail] = useState('');
@@ -56,15 +52,19 @@ export default function ProfilePage() {
     if (!user) return;
     setIsSaving(true);
     try {
-      await apiClient.patch(`/users/${user.id}`, {
+      // 自助通道：仅需登录态，不依赖 sys:user:update 管理权限
+      await apiClient.put('/auth/profile', {
         realName: realName || undefined,
         email: email || undefined,
         phone: phone || undefined,
       });
       updateUser({ realName, email, phone });
+      // 与后端数据对齐（服务端可能对字段做规整）
+      fetchProfileAndPermissions();
       showToast('个人资料已成功保存更新');
-    } catch {
-      showToast('保存资料失败，请重试', 'error');
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } } };
+      showToast(error.response?.data?.message || '保存资料失败，请重试', 'error');
     } finally {
       setIsSaving(false);
     }
@@ -72,6 +72,10 @@ export default function ProfilePage() {
 
   const handleSaveNewPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!oldPassword) {
+      setPwdError('请输入当前正在使用的原密码');
+      return;
+    }
     if (!newPassword || newPassword.length < 6) {
       setPwdError('新密码长度不能少于 6 位');
       return;
@@ -80,21 +84,24 @@ export default function ProfilePage() {
       setPwdError('两次输入的新密码不一致');
       return;
     }
-    if (!user) return;
 
     setPwdLoading(true);
     setPwdError('');
     try {
-      await apiClient.post(`/users/${user.id}/reset-password`, {
+      // 自助改密：后端校验旧密码，成功后吊销该账号全部会话凭证
+      await apiClient.patch('/auth/change-password', {
+        oldPassword,
         newPassword,
       });
-      showToast('登录密码已更新，请妥善保管新凭证');
-      setPwdDrawerOpen(false);
-      setOldPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-    } catch {
-      setPwdError('密码修改失败，请重试');
+      showToast('密码已更新，即将跳转登录页重新认证');
+      // 后端已吊销全部会话（refresh token 吊销 + tokenVersion 递增），
+      // 主动清理本地登录态并引导重新登录
+      setTimeout(() => {
+        logout();
+      }, 1500);
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } } };
+      setPwdError(error.response?.data?.message || '密码修改失败，请重试');
     } finally {
       setPwdLoading(false);
     }
@@ -316,6 +323,20 @@ export default function ProfilePage() {
               {pwdError}
             </div>
           )}
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              原密码 *
+            </label>
+            <input
+              type="password"
+              value={oldPassword}
+              onChange={(e) => setOldPassword(e.target.value)}
+              placeholder="请输入当前正在使用的登录密码"
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-600 focus:bg-white"
+              required
+            />
+          </div>
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1.5">

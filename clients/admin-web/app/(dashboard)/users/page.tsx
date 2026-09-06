@@ -137,7 +137,7 @@ export default function UsersPage() {
     try {
       if (currentUser) {
         // 编辑
-        await apiClient.patch(`/users/${currentUser.id}`, {
+        await apiClient.put(`/users/${currentUser.id}`, {
           realName: formRealName || undefined,
           email: formEmail || undefined,
           phone: formPhone || undefined,
@@ -229,7 +229,7 @@ export default function UsersPage() {
     if (!currentUser || !newPassword) return;
     setPwdLoading(true);
     try {
-      await apiClient.post(`/users/${currentUser.id}/reset-password`, {
+      await apiClient.patch(`/users/${currentUser.id}/reset-password`, {
         newPassword,
       });
       showToast(`已重置用户 ${currentUser.username} 的密码`);
