@@ -3,6 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaService } from '../../../prisma/prisma.service.js';
 import { CommonStatus } from '@prisma/client';
+import { getJwtSecret } from '../../../common/jwt-secret.js';
 
 export interface JwtPayload {
   sub: string;
@@ -16,7 +17,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET || 'autix_rbac_jwt_secret_key_2026_super_secure',
+      // fail-fast：密钥缺失时启动即抛错，禁止硬编码回退（防止伪造超管令牌）
+      secretOrKey: getJwtSecret(),
     });
   }
 

@@ -18,7 +18,7 @@ async function bootstrap() {
   app.useGlobalInterceptors(new AuditLogInterceptor(prisma));
 
   app.enableCors({
-    origin: ['http://localhost:3003', 'http://localhost:3002'],
+    origin: ['http://localhost:3100', 'http://localhost:3003', 'http://localhost:3002'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     credentials: true,
   });

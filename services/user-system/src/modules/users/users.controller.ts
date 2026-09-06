@@ -11,6 +11,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  ParseEnumPipe,
 } from '@nestjs/common';
 import { UsersService } from './users.service.js';
 import { CreateUserDto } from './dto/create-user.dto.js';
@@ -64,7 +65,10 @@ export class UsersController {
 
   @Patch(':id/status')
   @RequirePermissions('sys:user:update')
-  async updateStatus(@Param('id') id: string, @Body('status') status: CommonStatus) {
+  async updateStatus(
+    @Param('id') id: string,
+    @Body('status', new ParseEnumPipe(CommonStatus)) status: CommonStatus,
+  ) {
     return this.usersService.updateStatus(id, status);
   }
 

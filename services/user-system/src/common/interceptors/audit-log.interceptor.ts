@@ -104,7 +104,18 @@ export class AuditLogInterceptor implements NestInterceptor {
 
     try {
       const copy = JSON.parse(JSON.stringify(body));
-      const sensitiveKeys = ['password', 'newpassword', 'token', 'refreshtoken', 'secret'];
+      // 注意：key 比较前会 toLowerCase，因此这里必须全部小写。
+      // oldPassword（自助改密）若漏配，原密码将明文落入 operationLog 表。
+      const sensitiveKeys = [
+        'password',
+        'oldpassword',
+        'newpassword',
+        'confirmpassword',
+        'token',
+        'accesstoken',
+        'refreshtoken',
+        'secret',
+      ];
 
       const redact = (obj: any) => {
         for (const key of Object.keys(obj)) {

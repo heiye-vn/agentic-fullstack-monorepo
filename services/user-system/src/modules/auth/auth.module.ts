@@ -4,12 +4,14 @@ import { PassportModule } from '@nestjs/passport';
 import { AuthService } from './auth.service.js';
 import { AuthController } from './auth.controller.js';
 import { JwtStrategy } from './strategies/jwt.strategy.js';
+import { getJwtSecret } from '../../common/jwt-secret.js';
 
 @Module({
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'autix_rbac_jwt_secret_key_2026_super_secure',
+      // fail-fast：密钥缺失或过短时进程启动即抛错，禁止硬编码回退
+      secret: getJwtSecret(),
       signOptions: {
         expiresIn: (process.env.JWT_EXPIRES_IN || '15m') as any,
       },
