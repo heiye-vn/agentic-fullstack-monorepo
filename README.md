@@ -140,14 +140,15 @@ docker compose -f infra/compose/compose.dev.yaml up
 
 ### 模块架构
 - **后端服务**：[`services/user-system`](file:///d:/ZSP/Study/Ai%20Agent/agentic-fullstack-monorepo/services/user-system)（NestJS + Prisma + PostgreSQL，端口 `4002`）
-- **管理前端**：[`clients/admin-web`](file:///d:/ZSP/Study/Ai%20Agent/agentic-fullstack-monorepo/clients/admin-web)（Next.js 16 + HeroUI + Tailwind 4 + Proxy，端口 `3003`）
+- **管理前端**：[`clients/admin-web`](file:///d:/ZSP/Study/Ai%20Agent/agentic-fullstack-monorepo/clients/admin-web)（Next.js 16 + HeroUI + Tailwind 4 + Proxy，端口 `3100`）
 
 ### 快速启动 RBAC 全套系统
 ```bash
 # 1. 启动本地 PostgreSQL 容器
 docker compose -f infra/compose/compose.dev.yaml up -d postgres
 
-# 2. 数据库迁移与种子数据灌入 (自动创建组织、角色、权限树与初始账号)
+# 2. 同步数据库表结构并灌入初始种子数据 (组织、角色、权限树与预设账号)
+pnpm --filter @autix/user-system prisma:push
 pnpm --filter @autix/user-system prisma:seed
 
 # 3. 一键并发启动 RBAC 前后端

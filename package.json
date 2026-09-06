@@ -11,7 +11,8 @@
     "dev:admin-web": "pnpm --filter @autix/admin-web dev",
     "dev:rbac": "turbo run dev --filter=@autix/user-system --filter=@autix/admin-web",
     "build": "turbo build",
-    "typecheck": "turbo typecheck"
+    "typecheck": "turbo typecheck",
+    "postinstall": "pnpm --filter @autix/user-system prisma:generate"
   },
   "devDependencies": {
     "@types/node": "^22.13.5",
