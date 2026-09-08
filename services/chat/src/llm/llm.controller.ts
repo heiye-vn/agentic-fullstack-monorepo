@@ -9,6 +9,8 @@ import type {
   PromptPreviewResult,
   ChainInvokeResult,
   ChainBatchResult,
+  ToolBindResult,
+  ToolLoopResult,
 } from './llm.service.js';
 
 // ============================================================
@@ -173,6 +175,26 @@ export class LlmController {
     const input = body?.input?.trim() || DEFAULT_USER_INPUT;
     const service = this.requirementService ?? new RequirementService();
     return service.extract(input);
+  }
+
+  /**
+   * POST /api/langchain/tool-bind
+   * 模型单轮工具绑定调用，返回包含 tool_calls 的 AIMessage 结构
+   * 统一使用需求抽取场景
+   */
+  @Post('tool-bind')
+  async toolBind(@Body() body?: InvokeDto): Promise<ToolBindResult> {
+    return this.llmService.toolBind(body?.input);
+  }
+
+  /**
+   * POST /api/langchain/tool-loop
+   * 自动工具循环执行（Tool Loop / ReAct Loop），自动调度并执行工具，返回完整调用链路与最终抽取结论
+   * 统一使用需求抽取场景
+   */
+  @Post('tool-loop')
+  async toolLoop(@Body() body?: InvokeDto): Promise<ToolLoopResult> {
+    return this.llmService.toolLoop(body?.input);
   }
 }
 

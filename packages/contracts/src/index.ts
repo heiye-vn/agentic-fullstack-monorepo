@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+export { z };
+
 export const APP_NAME = 'llm';
 
 /**
