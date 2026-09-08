@@ -24,6 +24,8 @@
 ├── services/
 │   ├── chat/                 # [NestJS] AI 与 LangChain 智能体服务 (端口 4001)
 │   └── user-system/          # [NestJS + Prisma] 认证鉴权与用户权限微服务 (端口 4002)
+├── images/                   # 项目文档截图与效果演示素材
+│   └── chapter03/            # Chapter 03 工作台界面截图
 ├── packages/
 │   └── contracts/            # TypeScript 共享数据类型契约与 Zod Schema
 ├── infra/
@@ -145,6 +147,10 @@ pnpm run typecheck
   - 左侧配置面板与多功能调用触发器；右侧提供支持 JSON 语法高亮、实时 SSE 文本流、卡片式结构化结果及 Tool 调试折叠面板的智能终端面板。
 - **Apifox 接口规范资产**：
   - 在 [`services/chat/apifox-chain-api.json`](./services/chat/apifox-chain-api.json) 中内置全套 API 调试文件，开箱即用。
+
+### 2. 工作台效果展示
+
+![Chapter 03 AI 需求工作台界面](./images/chapter03/01.png)
 
 ---
 
