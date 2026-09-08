@@ -107,10 +107,10 @@ export default function Home() {
   return (
     <main className="h-screen w-screen overflow-hidden bg-[#000000] text-neutral-100 flex flex-col p-4 md:p-6 selection:bg-white selection:text-black relative font-sans">
       {/* 顶部微弱冷光雾化 (Linear / Vercel 极简曜石质感) */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[300px] bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.04)_0%,transparent_70%)] pointer-events-none" />
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-200 h-75 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.04)_0%,transparent_70%)] pointer-events-none" />
 
       {/* 顶部全局导航栏 */}
-      <header className="flex-shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-neutral-800/80 z-10">
+      <header className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-neutral-800/80 z-10">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-neutral-900 border border-neutral-700/60 flex items-center justify-center text-white shadow-sm">
             <svg
@@ -156,11 +156,12 @@ export default function Home() {
                 healthStatus?.includes("在线")
                   ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]"
                   : healthStatus
-                  ? "bg-amber-400"
-                  : "bg-neutral-500"
+                    ? "bg-amber-400"
+                    : "bg-neutral-500"
               }`}
             />
-            Nest: {checkingHealth ? "探测中..." : healthStatus || "探测健康状态"}
+            Nest:{" "}
+            {checkingHealth ? "探测中..." : healthStatus || "探测健康状态"}
           </button>
 
           <span
@@ -176,7 +177,7 @@ export default function Home() {
       <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-4 mt-4 z-10">
         {/* 左栏：输入与控制面板 (5 列) */}
         <section className="lg:col-span-5 flex flex-col h-full bg-[#0a0a0a] border border-neutral-800/80 rounded-2xl p-4 sm:p-5 shadow-[0_8px_30px_rgb(0,0,0,0.3)] overflow-hidden">
-          <div className="flex-shrink-0 space-y-2.5 pb-2.5">
+          <div className="shrink-0 space-y-2.5 pb-2.5">
             <div className="flex items-center justify-between">
               <label
                 htmlFor="requirement-input"
@@ -253,9 +254,16 @@ export default function Home() {
           </div>
 
           {/* 底部提交栏 */}
-          <div className="flex-shrink-0 flex items-center justify-between gap-3 pt-3 border-t border-neutral-800/80 mt-3">
+          <div className="shrink-0 flex items-center justify-between gap-3 pt-3 border-t border-neutral-800/80 mt-3">
             <span className="text-xs text-neutral-500">
-              快捷键：<kbd className="px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-neutral-400 font-mono text-[11px]">Ctrl</kbd> + <kbd className="px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-neutral-400 font-mono text-[11px]">Enter</kbd>
+              快捷键：
+              <kbd className="px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-neutral-400 font-mono text-[11px]">
+                Ctrl
+              </kbd>{" "}
+              +{" "}
+              <kbd className="px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-neutral-400 font-mono text-[11px]">
+                Enter
+              </kbd>
             </span>
 
             {/* Linear / Vercel 签名白底高亮按钮 */}
@@ -315,7 +323,7 @@ export default function Home() {
         {/* 右栏：结果展示与 JSON 容器 (7 列，仅内部滚动) */}
         <section className="lg:col-span-7 flex flex-col h-full bg-[#0a0a0a] border border-neutral-800/80 rounded-2xl p-4 sm:p-5 shadow-[0_8px_30px_rgb(0,0,0,0.3)] overflow-hidden">
           {/* 标题控制栏 */}
-          <div className="flex-shrink-0 flex items-center justify-between pb-3 border-b border-neutral-800/80 mb-3">
+          <div className="shrink-0 flex items-center justify-between pb-3 border-b border-neutral-800/80 mb-3">
             <h2 className="text-xs sm:text-sm font-medium text-neutral-200 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" />
               抽取结果展示 (JSON Result)
@@ -349,7 +357,9 @@ export default function Home() {
                           d="M5 13l4 4L19 7"
                         />
                       </svg>
-                      <span className="text-emerald-300 font-medium">已复制</span>
+                      <span className="text-emerald-300 font-medium">
+                        已复制
+                      </span>
                     </>
                   ) : (
                     <>
@@ -401,7 +411,9 @@ export default function Home() {
                   </svg>
                   请求失败
                 </div>
-                <p className="font-mono text-xs opacity-90 break-all">{error}</p>
+                <p className="font-mono text-xs opacity-90 break-all">
+                  {error}
+                </p>
               </div>
             )}
 
@@ -473,7 +485,7 @@ export default function Home() {
                 </div>
               </div>
             ) : (
-              <div className="h-full min-h-[200px] flex flex-col items-center justify-center text-center p-6 text-neutral-500 space-y-2.5">
+              <div className="h-full min-h-50 flex flex-col items-center justify-center text-center p-6 text-neutral-500 space-y-2.5">
                 <div className="w-12 h-12 rounded-xl bg-neutral-900 border border-neutral-800 flex items-center justify-center text-neutral-500">
                   <svg
                     className="w-6 h-6 stroke-[1.5]"
@@ -507,7 +519,7 @@ export default function Home() {
       </div>
 
       {/* 底部紧凑信息栏 */}
-      <footer className="flex-shrink-0 pt-3 border-t border-neutral-800/80 flex items-center justify-between text-xs text-neutral-500 mt-3 z-10">
+      <footer className="shrink-0 pt-3 border-t border-neutral-800/80 flex items-center justify-between text-xs text-neutral-500 mt-3 z-10">
         <span>Monorepo: Turborepo + pnpm</span>
         <span>NestJS (API: 4001) + Next.js 16 (Port: 3002)</span>
       </footer>

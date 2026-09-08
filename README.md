@@ -10,7 +10,7 @@
 
 - **Chapter 01: 全栈工程化底座**：搭建基于 pnpm + Turborepo 的多包工作区，实现类型契约跨端共享、独立 Dockerfile 打包与本地容器热更新。
 - **Chapter 02: 企业级 RBAC 权限管控系统**：基于 PostgreSQL + Prisma 落地双 Token 轮转鉴权、细粒度权限守卫、用户与组织树管理、操作审计及 Next.js 16 Proxy 管理中台。
-- **Chapter 03: LangChain 链式调用与 AI 需求工作台**：构建基于 LangChain Expression Language (LCEL) 的提示词管道、流式 SSE 响应、Zod 结构化抽取、自动工具循环（Tool Loop），并提供 Linear 曜石黑风格的前端交互工作台。
+- **Chapter 03: 基于 LangChain 的需求分析提取平台**：构建基于 LangChain Expression Language (LCEL) 的提示词管道、流式 SSE 响应、Zod 结构化抽取、自动工具循环（Tool Loop），并提供 Linear 曜石黑风格的交互工作界面。
 
 ---
 
@@ -19,10 +19,10 @@
 ```text
 .
 ├── clients/
-│   ├── chat-web/             # [Next.js 16] AI 需求分析双栏工作台 (端口 3002)
+│   ├── chat-web/             # [Next.js 16] 需求分析提取前端界面 (端口 3002)
 │   └── admin-web/            # [Next.js 16 + HeroUI] RBAC 权限管理控制中心 (端口 3100)
 ├── services/
-│   ├── chat/                 # [NestJS] AI 与 LangChain 智能体服务 (端口 4001)
+│   ├── chat/                 # [NestJS] LangChain 需求分析与调用链后端服务 (端口 4001)
 │   └── user-system/          # [NestJS + Prisma] 认证鉴权与用户权限微服务 (端口 4002)
 ├── packages/
 │   └── contracts/            # TypeScript 共享数据类型契约与 Zod Schema
@@ -104,10 +104,10 @@ pnpm dev:rbac
 ### 独立子系统启动
 
 ```bash
-# 启动 AI 智能体工作台前端 (端口 3002)
+# 启动需求分析提取前端 (端口 3002)
 pnpm dev:chat-web
 
-# 启动 AI 智能体后端服务 (端口 4001)
+# 启动 LangChain 需求分析后端服务 (端口 4001)
 pnpm dev:chat
 
 # 启动 RBAC 权限系统管理前端 (端口 3100)
@@ -129,7 +129,7 @@ pnpm run typecheck
 
 ---
 
-## 🤖 Chapter 03: LangChain 需求分析链与 AI 智能体工作台
+## 🤖 Chapter 03: 基于 LangChain 的需求分析提取平台
 
 在第三阶段，项目全面引入 **LangChain v0.3+** 与 **LCEL（LangChain Expression Language）** 架构，实现了从基础模型调用到智能需求抽取、工具循环执行的工业级落地：
 
@@ -148,9 +148,9 @@ pnpm run typecheck
 - **Apifox 接口规范资产**：
   - 在 [`docs/apifox/chapter03-first-chain.json`](./docs/apifox/chapter03-first-chain.json) 中内置全套 API 调试文件，开箱即用。
 
-### 2. 工作台效果展示
+### 2. 界面效果展示
 
-![Chapter 03 AI 需求工作台界面](./images/chapter03/01.png)
+![Chapter 03 需求分析提取平台界面](./images/chapter03/01.png)
 
 ---
 
