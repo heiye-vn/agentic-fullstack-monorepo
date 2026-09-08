@@ -35,7 +35,8 @@ export class RequirementService {
     input: string,
     customModel?: ChatOpenAI,
   ): Promise<RequirementResult> {
-    const messages = await this.prompt.formatMessages({ input });
+    const sanitizedInput = input?.trim() ?? '';
+    const messages = await this.prompt.formatMessages({ input: sanitizedInput });
     const model = customModel ?? createChatModel({ streaming: false });
     const structuredModel = model.withStructuredOutput(RequirementResultSchema);
     const result = await structuredModel.invoke(messages);
