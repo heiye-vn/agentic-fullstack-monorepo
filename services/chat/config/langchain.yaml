@@ -1,0 +1,33 @@
+# LangChain 运行参数配置（密钥/地址一律走 .env 环境变量）
+
+llm:
+  # 默认模型标识
+  modelName: qwen3.7-flash
+  # 生成温度：0 = 确定性输出，1 = 高随机性
+  temperature: 0
+  # 单次最大生成 token 数
+  maxTokens: 2048
+  # 请求超时（毫秒）
+  timeoutMs: 30000
+
+retrieval:
+  # 向量检索返回的最大文档数
+  topK: 4
+  # 相似度阈值（0~1）
+  scoreThreshold: 0.75
+  # Embedding 模型标识
+  embeddingModel: text-embedding-3-small
+
+tools:
+  # 是否启用 Web 搜索工具
+  enableWebSearch: false
+  # 是否启用代码解释器
+  enableCodeInterpreter: false
+
+features:
+  # 是否启用流式输出
+  streaming: true
+  # 是否启用对话记忆
+  memory: false
+  # 记忆窗口大小（保留最近 N 轮对话）
+  memoryWindowSize: 10
