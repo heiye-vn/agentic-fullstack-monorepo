@@ -24,10 +24,10 @@
 ├── services/
 │   ├── chat/                 # [NestJS] AI 与 LangChain 智能体服务 (端口 4001)
 │   └── user-system/          # [NestJS + Prisma] 认证鉴权与用户权限微服务 (端口 4002)
-├── images/                   # 项目文档截图与效果演示素材
-│   └── chapter03/            # Chapter 03 工作台界面截图
 ├── packages/
 │   └── contracts/            # TypeScript 共享数据类型契约与 Zod Schema
+├── docs/
+│   └── apifox/               # Apifox 接口测试导出集合 (按章节归档)
 ├── infra/
 │   └── compose/              # Dockerfile 镜像构建与 Docker Compose 容器编排
 │       ├── Dockerfile.chat   # chat 服务构建镜像
@@ -133,7 +133,7 @@ pnpm run typecheck
 
 在第三阶段，项目全面引入 **LangChain v0.3+** 与 **LCEL（LangChain Expression Language）** 架构，实现了从基础模型调用到智能需求抽取、工具循环执行的工业级落地：
 
-### 1. 核心技术亮点
+### 1. 功能点
 
 - **LCEL 链式管道架构**：通过 `prompt.pipe(model).pipe(outputParser)` 编排声明式调用链，天然具备流式（Stream）、批处理（Batch）与单次调用（Invoke）一致性。
 - **Zod 驱动的类型级结构化输出**：
@@ -146,7 +146,7 @@ pnpm run typecheck
   - 前端位于 [`clients/chat-web`](./clients/chat-web)，重构为左右双栏分屏工作台。
   - 左侧配置面板与多功能调用触发器；右侧提供支持 JSON 语法高亮、实时 SSE 文本流、卡片式结构化结果及 Tool 调试折叠面板的智能终端面板。
 - **Apifox 接口规范资产**：
-  - 在 [`services/chat/apifox-chain-api.json`](./services/chat/apifox-chain-api.json) 中内置全套 API 调试文件，开箱即用。
+  - 在 [`docs/apifox/chapter03-first-chain.json`](./docs/apifox/chapter03-first-chain.json) 中内置全套 API 调试文件，开箱即用。
 
 ### 2. 工作台效果展示
 
@@ -174,11 +174,11 @@ pnpm dev:rbac
 
 ### 预设测试账号与角色
 
-| 账号 | 密码 | 角色 | 权限范围 |
-| :--- | :--- | :--- | :--- |
-| `admin` | `Admin123!` | `super_admin` | 全局完全支配权限（包含 `*:*:*` 旁路放行），防删除保护 |
-| `test_ops` | `Admin123!` | `admin` | 系统运维主管，拥有除超级权限外的全量业务管理与配置权限 |
-| `test_user` | `User123!` | `general_user` | 普通员工，仅具备基础菜单与列表查询权限（写操作受 403 拦截） |
+| 账号        | 密码        | 角色           | 权限范围                                                    |
+| :---------- | :---------- | :------------- | :---------------------------------------------------------- |
+| `admin`     | `Admin123!` | `super_admin`  | 全局完全支配权限（包含 `*:*:*` 旁路放行），防删除保护       |
+| `test_ops`  | `Admin123!` | `admin`        | 系统运维主管，拥有除超级权限外的全量业务管理与配置权限      |
+| `test_user` | `User123!`  | `general_user` | 普通员工，仅具备基础菜单与列表查询权限（写操作受 403 拦截） |
 
 ### 核心安全机制
 
@@ -206,5 +206,3 @@ docker compose -f infra/compose/compose.yaml up --build
 ```bash
 docker compose -f infra/compose/compose.dev.yaml up
 ```
-
-

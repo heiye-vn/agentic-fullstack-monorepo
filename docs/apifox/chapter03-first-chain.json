@@ -1,0 +1,1663 @@
+{
+  "apifoxProject": "1.0.0",
+  "$schema": {
+    "app": "apifox",
+    "type": "project",
+    "version": "1.2.0"
+  },
+  "info": {
+    "name": "test",
+    "description": "",
+    "mockRule": {
+      "rules": [],
+      "enableSystemRule": true
+    }
+  },
+  "projectSetting": {
+    "id": "7876514",
+    "auth": {},
+    "securityScheme": {},
+    "gateway": [],
+    "language": "zh-CN",
+    "apiStatuses": [
+      "developing",
+      "testing",
+      "released",
+      "deprecated"
+    ],
+    "mockSettings": {},
+    "preProcessors": [],
+    "postProcessors": [],
+    "advancedSettings": {
+      "enableJsonc": true,
+      "enableBigint": false,
+      "responseValidate": true,
+      "enableTestScenarioSetting": false,
+      "enableYAPICompatScript": false,
+      "isDefaultUrlEncoding": 2,
+      "publishedDocUrlRules": {
+        "defaultRule": "RESOURCE_KEY_ONLY",
+        "resourceKeyStandard": "NEW"
+      },
+      "folderShareExpandModeSettings": {
+        "expandId": [],
+        "mode": "AUTO"
+      }
+    },
+    "initialDisabledMockIds": [],
+    "servers": [
+      {
+        "id": "default",
+        "name": "默认服务",
+        "moduleId": 7137552
+      }
+    ],
+    "cloudMock": {
+      "enable": false,
+      "security": "free",
+      "tokenKey": "apifoxToken",
+      "isCreatedAutomaticallyByDefaultConfigFromAdmin": true
+    }
+  },
+  "apiCollection": [
+    {
+      "name": "根目录",
+      "id": 78525858,
+      "auth": {},
+      "securityScheme": {},
+      "parentId": 0,
+      "serverId": "",
+      "description": "",
+      "identityPattern": {
+        "httpApi": {
+          "type": "methodAndPath",
+          "bodyType": "",
+          "fields": []
+        }
+      },
+      "shareSettings": {},
+      "visibility": "SHARED",
+      "moduleId": 7137552,
+      "preProcessors": [
+        {
+          "id": "inheritProcessors",
+          "type": "inheritProcessors",
+          "data": {}
+        }
+      ],
+      "postProcessors": [
+        {
+          "id": "inheritProcessors",
+          "type": "inheritProcessors",
+          "data": {}
+        }
+      ],
+      "inheritPostProcessors": {},
+      "inheritPreProcessors": {},
+      "items": [
+        {
+          "name": "autix",
+          "id": 95191182,
+          "auth": {},
+          "securityScheme": {},
+          "parentId": 0,
+          "serverId": "",
+          "description": "",
+          "identityPattern": {
+            "httpApi": {
+              "type": "inherit",
+              "bodyType": "",
+              "fields": []
+            }
+          },
+          "shareSettings": {},
+          "visibility": "INHERITED",
+          "moduleId": 7137552,
+          "preProcessors": [
+            {
+              "id": "inheritProcessors",
+              "type": "inheritProcessors",
+              "data": {}
+            }
+          ],
+          "postProcessors": [
+            {
+              "id": "inheritProcessors",
+              "type": "inheritProcessors",
+              "data": {}
+            }
+          ],
+          "inheritPostProcessors": {},
+          "inheritPreProcessors": {},
+          "items": [
+            {
+              "name": "first-chain",
+              "id": 95191249,
+              "auth": {},
+              "securityScheme": {},
+              "parentId": 95191182,
+              "serverId": "",
+              "description": "",
+              "identityPattern": {
+                "httpApi": {
+                  "type": "inherit",
+                  "bodyType": "",
+                  "fields": []
+                }
+              },
+              "shareSettings": {},
+              "visibility": "INHERITED",
+              "moduleId": 7137552,
+              "preProcessors": [
+                {
+                  "id": "inheritProcessors",
+                  "type": "inheritProcessors",
+                  "data": {}
+                }
+              ],
+              "postProcessors": [
+                {
+                  "id": "inheritProcessors",
+                  "type": "inheritProcessors",
+                  "data": {}
+                }
+              ],
+              "inheritPostProcessors": {},
+              "inheritPreProcessors": {},
+              "items": [
+                {
+                  "name": "单次调用(invoke)",
+                  "api": {
+                    "id": "511469791",
+                    "method": "post",
+                    "path": "/api/langchain/invoke",
+                    "parameters": {},
+                    "auth": {},
+                    "securityScheme": {},
+                    "commonParameters": {
+                      "query": [],
+                      "body": [],
+                      "cookie": [],
+                      "header": []
+                    },
+                    "responses": [
+                      {
+                        "id": "183817940",
+                        "code": 200,
+                        "name": "成功",
+                        "headers": [],
+                        "jsonSchema": {
+                          "type": "object",
+                          "properties": {}
+                        },
+                        "itemSchema": {},
+                        "description": "",
+                        "contentType": "json",
+                        "mediaType": ""
+                      }
+                    ],
+                    "responseExamples": [
+                      {
+                        "name": "已创建",
+                        "data": "{\"content\":\"以下是将您的自然语言需求转化为标准结构化描述的模板，可直接用于产品需求文档（PRD）或开发任务拆解：\\n\\n### 📋 结构化需求描述：用户注册信息校验\\n\\n| 属性 | 内容 |\\n|:---|:---|\\n| **需求ID** | `REQ-REG-001`（可按项目规范替换） |\\n| **需求名称** | 用户注册必填项及基础校验 |\\n| **所属模块** | 用户中心 / 注册登录 |\\n| **需求类型** | 功能需求 / 数据校验 |\\n| **优先级** | `P1`（高） |\\n| **前置条件** | 用户进入注册页面或点击“立即注册”按钮 |\\n| **输入字段** | 1. 手机号<br>2. 密码 |\\n| **业务规则/约束** | 1. **手机号**：必填，不可为空。<br>2. **密码**：必填，长度必须 `≥ 8` 个字符。 |\\n| **校验逻辑与交互** | • 支持前端即时校验（失焦/输入时）或表单提交时统一校验<br>• 校验不通过时：阻止表单提交，定位至错误字段并高亮提示<br>• 校验全部通过：放行至后端接口执行注册逻辑 |\\n| **错误提示文案** | • 手机号为空或格式非法：`“请输入有效的手机号码”`<br>• 密码长度不足：`“密码长度不能少于8位”` |\\n| **后置条件** | 校验通过 → 进入下一步（如发送短信验证码/直接创建账号）<br>校验失败 → 停留当前页，保留已填正确字段 |\\n| **备注/扩展建议** | • 建议补充：手机号唯一性校验、短信验证码绑定流程<br>• 建议补充：密码复杂度规则（如大小写字母+数字组合）<br>• 前后端均需做二次校验，防止绕过前端限制 |\\n\\n💡 **使用提示**：该结构已覆盖 `输入-规则-交互-异常-后置` 完整链路。如需对接具体技术栈（如 Vue/React 表单校验、Spring Boot 参数校验注解），可提供进一步细化代码级规则。\",\"model\":\"qwen3.7-flash\",\"usage\":{\"inputTokens\":44,\"outputTokens\":1584,\"totalTokens\":1628}}",
+                        "responseId": "183817940"
+                      }
+                    ],
+                    "requestBody": {
+                      "type": "application/json",
+                      "parameters": [],
+                      "jsonSchema": {
+                        "type": "object",
+                        "properties": {}
+                      },
+                      "required": true,
+                      "mediaType": "",
+                      "examples": [
+                        {
+                          "mediaType": "application/json",
+                          "value": "{ \"input\": \"用户注册时必须绑定手机号，密码至少8位\" }"
+                        }
+                      ],
+                      "oasExtensions": ""
+                    },
+                    "description": "",
+                    "tags": [],
+                    "status": "developing",
+                    "serverId": "",
+                    "operationId": "",
+                    "sourceUrl": "",
+                    "ordering": 10,
+                    "cases": [],
+                    "mocks": [],
+                    "customApiFields": "{}",
+                    "advancedSettings": {
+                      "disabledSystemHeaders": {}
+                    },
+                    "mockScript": {},
+                    "codeSamples": [],
+                    "commonResponseStatus": {},
+                    "responseChildren": [],
+                    "visibility": "INHERITED",
+                    "moduleId": 7137552,
+                    "oasExtensions": "",
+                    "type": "http",
+                    "preProcessors": [],
+                    "postProcessors": [],
+                    "inheritPostProcessors": {},
+                    "inheritPreProcessors": {}
+                  }
+                },
+                {
+                  "name": "流式调用(stream)",
+                  "api": {
+                    "id": "511474069",
+                    "method": "post",
+                    "path": "/api/langchain/stream",
+                    "parameters": {},
+                    "auth": {},
+                    "securityScheme": {},
+                    "commonParameters": {
+                      "query": [],
+                      "body": [],
+                      "cookie": [],
+                      "header": []
+                    },
+                    "responses": [
+                      {
+                        "id": "136578737",
+                        "code": 201,
+                        "name": "已创建",
+                        "headers": [],
+                        "jsonSchema": {
+                          "type": "object",
+                          "properties": {}
+                        },
+                        "itemSchema": {
+                          "type": "object",
+                          "required": [
+                            "data"
+                          ],
+                          "properties": {
+                            "data": {
+                              "type": "string",
+                              "contentSchema": {
+                                "type": "object",
+                                "properties": {
+                                  "content": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "content"
+                                ],
+                                "x-apifox-ignore-properties": [],
+                                "x-apifox-orders": [
+                                  "content"
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        "description": "",
+                        "contentType": "eventStream",
+                        "mediaType": ""
+                      }
+                    ],
+                    "responseExamples": [],
+                    "requestBody": {
+                      "type": "application/json",
+                      "parameters": [],
+                      "jsonSchema": {
+                        "type": "object",
+                        "properties": {}
+                      },
+                      "required": true,
+                      "mediaType": "",
+                      "examples": [
+                        {
+                          "mediaType": "application/json",
+                          "value": "{ \"input\": \"用户注册时必须绑定手机号，密码至少8位\" }"
+                        }
+                      ],
+                      "oasExtensions": ""
+                    },
+                    "description": "",
+                    "tags": [],
+                    "status": "developing",
+                    "serverId": "",
+                    "operationId": "",
+                    "sourceUrl": "",
+                    "ordering": 20,
+                    "cases": [],
+                    "mocks": [],
+                    "customApiFields": "{}",
+                    "advancedSettings": {
+                      "disabledSystemHeaders": {}
+                    },
+                    "mockScript": {},
+                    "codeSamples": [],
+                    "commonResponseStatus": {},
+                    "responseChildren": [],
+                    "visibility": "INHERITED",
+                    "moduleId": 7137552,
+                    "oasExtensions": "",
+                    "type": "http",
+                    "preProcessors": [],
+                    "postProcessors": [],
+                    "inheritPostProcessors": {},
+                    "inheritPreProcessors": {}
+                  }
+                },
+                {
+                  "name": "批量调用(batch)",
+                  "api": {
+                    "id": "511677304",
+                    "method": "post",
+                    "path": "/api/langchain/batch",
+                    "parameters": {},
+                    "auth": {},
+                    "securityScheme": {},
+                    "commonParameters": {
+                      "query": [],
+                      "body": [],
+                      "cookie": [],
+                      "header": []
+                    },
+                    "responses": [
+                      {
+                        "id": "185276280",
+                        "code": 200,
+                        "name": "成功",
+                        "headers": [],
+                        "jsonSchema": {
+                          "type": "object",
+                          "properties": {}
+                        },
+                        "itemSchema": {},
+                        "description": "",
+                        "contentType": "json",
+                        "mediaType": ""
+                      }
+                    ],
+                    "responseExamples": [
+                      {
+                        "name": "已创建",
+                        "data": "{\"results\":[{\"content\":\"以下是将您的自然语言需求转化为标准化结构化的需求描述，可直接用于产品文档（PRD）、开发任务拆解或测试用例编写：\\n\\n### 📋 结构化需求描述\\n\\n| 维度 | 详细说明 |\\n|:---|:---|\\n| **需求名称** | 用户注册信息强制校验 |\\n| **需求类型** | 功能需求 / 安全合规 |\\n| **优先级** | `P1`（高） |\\n| **触发场景** | 用户填写注册表单并提交时 |\\n| **涉及字段** | 1. 手机号<br>2. 密码 |\\n| **核心规则** | 1. **手机号**：`必填`<br>2. **密码**：`必填`，且长度 `≥ 8` 位字符 |\\n| **校验层级** | 前端实时校验 + 后端接口二次校验 |\\n| **异常反馈** | 校验失败时拦截提交，返回明确错误提示（例：`“请输入有效的手机号码”`、`“密码长度不能少于8位”`） |\\n| **数据约束** | 手机号需符合当地通信规范（如11位纯数字）；密码明文传输需加密，存储需加盐哈希 |\\n\\n---\\n\\n💡 **实施建议（供参考）**\\n- **手机号**：建议补充 `短信验证码校验` 及 `全局唯一性校验`，防止虚假/重复注册。\\n- **密码**：除长度外，实际业务常需补充 `复杂度规则`（如：至少包含字母+数字/特殊字符中的2种），可根据安全等级决定是否纳入本期迭代。\\n- **日志与风控**：建议记录注册失败次数，防范机器批量撞库或短信轰炸。\\n\\n如需输出为 `JSON` 格式、对接 Jira/禅道 模板，或补充边界用例（如空格处理、特殊字符兼容等），可提供具体使用场景，我将为您进一步调整。\",\"model\":\"qwen3.7-flash\",\"usage\":{\"inputTokens\":44,\"outputTokens\":1399,\"totalTokens\":1443}},{\"content\":\"以下是将您的自然语言需求转化为标准化产品/技术文档结构的需求描述，可直接用于PRD编写、研发评审或测试用例设计：\\n\\n### 📋 需求结构化描述：订单超时自动取消\\n\\n| 字段 | 内容 |\\n|:---|:---|\\n| **需求名称** | 订单超时自动取消机制 |\\n| **需求类型** | 业务规则 / 自动化流程 |\\n| **优先级** | `P1`（核心交易链路） |\\n| **触发条件** | 订单创建后，状态为「待支付」且持续时长 `≥ 30分钟` |\\n| **执行动作** | 系统自动将订单状态更新为「已取消」 |\\n| **前置条件** | 1. 订单已成功生成并进入待支付状态<br>2. 超时检测服务（定时任务/消息队列/时间轮等）正常运行 |\\n| **后置条件** | 1. 订单状态变更为「已取消」<br>2. 释放关联库存、优惠券、限购额度等资源<br>3. 若已扣款，自动触发退款流程<br>4. 向用户端推送订单取消通知（站内信/短信/APP Push） |\\n| **异常与边界** | 1. **支付并发**：超时期间用户完成支付 → 以服务端接收支付成功回调时间为准，不触发取消<br>2. **计时基准**：建议采用服务端统一时间戳，排除客户端时区差异；明确是否包含节假日/系统维护期<br>3. **幂等性**：取消接口需支持重复调用不产生副作用（如重复退款、重复发券）<br>4. **性能影响**：高峰时段大量订单同时超时，需评估批量处理能力与数据库锁竞争 |\\n| **验收标准** | ✅ 满足以下任一即可视为通过：<br>• `功能验证`：创建订单后静置30分钟，状态准确转为「已取消」<br>• `正向拦截`：29分59秒内支付成功，订单正常流转至「已支付」<br>• `数据一致性`：取消后库存回滚、退款流水、通知记录完整可查<br>• `可观测性`：超时触发日志、状态变更轨迹、重试记录清晰可审计 |\\n| **补充建议** | • **适用范围**：建议明确策略生效的订单类型（如：全量订单 / 仅虚拟商品 / 仅特定渠道）<br>• **可配置化**：超时时长建议支持后台动态调整（默认30分钟），便于运营活动灵活管控<br>• **上下游协同**：需与财务对账、客服工单、风控反作弊模块对齐取消后的处理逻辑 |\\n\\n💡 **使用提示**：  \\n- 若需进一步细化，可补充：`具体实现方案（如：Redis过期监听 vs 定时扫描）`、`通知模板文案`、`退款时效要求` 等字段。  \\n- 需要我为您输出对应的 `API接口定义`、`状态机流转图` 或 `测试用例清单` 吗？可提供具体方向。\",\"model\":\"qwen3.7-flash\",\"usage\":{\"inputTokens\":41,\"outputTokens\":1999,\"totalTokens\":2040}}],\"totalDurationMs\":26130}",
+                        "responseId": "185276280"
+                      }
+                    ],
+                    "requestBody": {
+                      "type": "application/json",
+                      "parameters": [],
+                      "jsonSchema": {
+                        "type": "object",
+                        "properties": {}
+                      },
+                      "required": true,
+                      "mediaType": "",
+                      "examples": [
+                        {
+                          "mediaType": "application/json",
+                          "value": "{ \"inputs\": [\"用户注册时必须绑定手机号，密码至少8位\", \"订单超时30分钟自动取消\"] }"
+                        }
+                      ],
+                      "oasExtensions": ""
+                    },
+                    "description": "",
+                    "tags": [],
+                    "status": "developing",
+                    "serverId": "",
+                    "operationId": "",
+                    "sourceUrl": "",
+                    "ordering": 30,
+                    "cases": [],
+                    "mocks": [],
+                    "customApiFields": "{}",
+                    "advancedSettings": {
+                      "disabledSystemHeaders": {}
+                    },
+                    "mockScript": {},
+                    "codeSamples": [],
+                    "commonResponseStatus": {},
+                    "responseChildren": [],
+                    "visibility": "INHERITED",
+                    "moduleId": 7137552,
+                    "oasExtensions": "",
+                    "type": "http",
+                    "preProcessors": [],
+                    "postProcessors": [],
+                    "inheritPostProcessors": {},
+                    "inheritPreProcessors": {}
+                  }
+                },
+                {
+                  "name": "prompt模板渲染",
+                  "api": {
+                    "id": "511684096",
+                    "method": "post",
+                    "path": "/api/langchain/prompt-preview",
+                    "parameters": {
+                      "header": [
+                        {
+                          "required": false,
+                          "description": "",
+                          "type": "string",
+                          "id": "8AX9f87NDf",
+                          "example": "application/json",
+                          "enable": true,
+                          "name": "Content-Type"
+                        }
+                      ]
+                    },
+                    "auth": {},
+                    "securityScheme": {},
+                    "commonParameters": {
+                      "query": [],
+                      "body": [],
+                      "cookie": [],
+                      "header": []
+                    },
+                    "responses": [
+                      {
+                        "id": "186417613",
+                        "code": 200,
+                        "name": "成功",
+                        "headers": [],
+                        "jsonSchema": {
+                          "type": "object",
+                          "properties": {}
+                        },
+                        "itemSchema": {},
+                        "description": "",
+                        "contentType": "json",
+                        "mediaType": ""
+                      }
+                    ],
+                    "responseExamples": [
+                      {
+                        "name": "已创建",
+                        "data": "{\"input\":\"订单超时的解决方案\",\"messages\":[{\"role\":\"system\",\"content\":\"你是一名\\\"需求结构化抽取助手\\\"。\\n\\n你的任务是：\\n从输入文本中提取结构化字段。\\n\\n严格要求：\\n1. 不允许编造信息\\n2. action 必须是唯一核心动作（动词+对象）\\n3. constraints 只保留明确约束（必须 / 至少 / 不得 / 不能）\\n4. entities 只提取文本中真实出现的名词\\n5. 如果不存在某字段，返回空数组\\n\\n输出必须符合 schema，不要输出解释\"},{\"role\":\"human\",\"content\":\"请抽取结构化信息：\\n\\n输入：\\n订单超时的解决方案\"}]}",
+                        "responseId": "186417613"
+                      }
+                    ],
+                    "requestBody": {
+                      "type": "application/json",
+                      "parameters": [],
+                      "jsonSchema": {
+                        "type": "object",
+                        "properties": {}
+                      },
+                      "required": true,
+                      "mediaType": "",
+                      "examples": [
+                        {
+                          "mediaType": "application/json",
+                          "value": "{\r\n  \"input\": \"订单超时的解决方案\"\r\n}"
+                        }
+                      ],
+                      "oasExtensions": ""
+                    },
+                    "description": "",
+                    "tags": [],
+                    "status": "developing",
+                    "serverId": "",
+                    "operationId": "",
+                    "sourceUrl": "",
+                    "ordering": 40,
+                    "cases": [],
+                    "mocks": [],
+                    "customApiFields": "{}",
+                    "advancedSettings": {
+                      "disabledSystemHeaders": {}
+                    },
+                    "mockScript": {},
+                    "codeSamples": [],
+                    "commonResponseStatus": {},
+                    "responseChildren": [],
+                    "visibility": "INHERITED",
+                    "moduleId": 7137552,
+                    "oasExtensions": "",
+                    "type": "http",
+                    "preProcessors": [],
+                    "postProcessors": [],
+                    "inheritPostProcessors": {},
+                    "inheritPreProcessors": {}
+                  }
+                },
+                {
+                  "name": "模板渲染并调用大模型",
+                  "api": {
+                    "id": "511688881",
+                    "method": "post",
+                    "path": "http://localhost:4001/api/langchain/prompt-to-model",
+                    "parameters": {
+                      "header": [
+                        {
+                          "required": false,
+                          "description": "",
+                          "type": "string",
+                          "id": "3kBPXhMtXn",
+                          "example": "application/json",
+                          "enable": true,
+                          "name": "Content-Type"
+                        }
+                      ]
+                    },
+                    "auth": {},
+                    "securityScheme": {},
+                    "commonParameters": {
+                      "query": [],
+                      "body": [],
+                      "cookie": [],
+                      "header": []
+                    },
+                    "responses": [
+                      {
+                        "id": "172938121",
+                        "code": 200,
+                        "name": "成功",
+                        "jsonSchema": {
+                          "type": "object",
+                          "properties": {}
+                        },
+                        "itemSchema": {},
+                        "contentType": "json"
+                      }
+                    ],
+                    "responseExamples": [
+                      {
+                        "name": "已创建",
+                        "data": "{\"content\":\"{\\n  \\\"action\\\": [\\\"绑定手机号\\\"],\\n  \\\"constraints\\\": [\\\"必须\\\", \\\"至少8位\\\"],\\n  \\\"entities\\\": [\\\"用户\\\", \\\"手机号\\\", \\\"密码\\\"]\\n}\",\"model\":\"qwen3.7-flash\",\"usage\":{\"inputTokens\":134,\"outputTokens\":2815,\"totalTokens\":2949}}",
+                        "responseId": "172938121"
+                      }
+                    ],
+                    "requestBody": {
+                      "type": "application/json",
+                      "parameters": [],
+                      "jsonSchema": {
+                        "type": "object",
+                        "properties": {}
+                      },
+                      "required": true,
+                      "mediaType": "",
+                      "examples": [
+                        {
+                          "mediaType": "application/json",
+                          "value": "{\r\n  \"input\": \"用户注册时必须绑定手机号，密码至少8位\"\r\n}"
+                        }
+                      ],
+                      "oasExtensions": ""
+                    },
+                    "description": "",
+                    "tags": [],
+                    "status": "developing",
+                    "serverId": "",
+                    "operationId": "",
+                    "sourceUrl": "",
+                    "ordering": 30,
+                    "cases": [],
+                    "mocks": [],
+                    "customApiFields": "{}",
+                    "advancedSettings": {
+                      "disabledSystemHeaders": {}
+                    },
+                    "mockScript": {},
+                    "codeSamples": [],
+                    "commonResponseStatus": {},
+                    "responseChildren": [],
+                    "visibility": "INHERITED",
+                    "moduleId": 7137552,
+                    "oasExtensions": "",
+                    "type": "http",
+                    "preProcessors": [],
+                    "postProcessors": [],
+                    "inheritPostProcessors": {},
+                    "inheritPreProcessors": {}
+                  }
+                },
+                {
+                  "name": "LCEL 链单次调用 (chain-invoke)",
+                  "api": {
+                    "id": "511798325",
+                    "method": "post",
+                    "path": "/api/langchain/chain-invoke",
+                    "parameters": {
+                      "path": [],
+                      "query": [],
+                      "cookie": [],
+                      "header": []
+                    },
+                    "auth": {},
+                    "securityScheme": {},
+                    "commonParameters": {},
+                    "responses": [
+                      {
+                        "id": "178642259",
+                        "code": "200",
+                        "headers": [],
+                        "jsonSchema": {
+                          "$ref": "#/definitions/311631921"
+                        },
+                        "itemSchema": {},
+                        "description": "调用成功",
+                        "contentType": "json",
+                        "mediaType": "application/json",
+                        "oasExtensions": ""
+                      }
+                    ],
+                    "responseExamples": [
+                      {
+                        "name": "成功示例",
+                        "data": "{\n    \"content\": \"{\\n  \\\"action\\\": \\\"用户注册\\\",\\n  \\\"constraints\\\": [\\n    \\\"必须绑定手机号\\\",\\n    \\\"密码至少8位\\\"\\n  ],\\n  \\\"entities\\\": [\\n    \\\"用户\\\",\\n    \\\"手机号\\\",\\n    \\\"密码\\\"\\n  ]\\n}\"\n}",
+                        "responseId": "178642259",
+                        "description": "",
+                        "oasKey": "",
+                        "oasExtensions": ""
+                      }
+                    ],
+                    "requestBody": {
+                      "type": "application/json",
+                      "parameters": [],
+                      "jsonSchema": {
+                        "$ref": "#/definitions/311631919"
+                      },
+                      "mediaType": "application/json",
+                      "oasExtensions": "",
+                      "required": false,
+                      "additionalContentTypes": [],
+                      "examples": [
+                        {
+                          "value": "{\n    \"input\": \"用户注册时必须绑定手机号，密码至少8位\"\n}",
+                          "mediaType": "application/json",
+                          "description": ""
+                        }
+                      ]
+                    },
+                    "description": "单次调用 requirementChain，通过 StringOutputParser 直接返回解析后的字符串结果。输入为空时统一兜底为：'用户注册时必须绑定手机号，密码至少8位'。",
+                    "tags": [],
+                    "status": "released",
+                    "serverId": "",
+                    "operationId": "chainInvoke",
+                    "sourceUrl": "",
+                    "ordering": 46,
+                    "cases": [
+                      {
+                        "id": 411533862,
+                        "type": "DEBUG_CASE",
+                        "path": null,
+                        "name": "成功",
+                        "responseId": "178642259",
+                        "parameters": {
+                          "path": [],
+                          "query": [],
+                          "cookie": [],
+                          "header": []
+                        },
+                        "commonParameters": {},
+                        "requestBody": {
+                          "parameters": [],
+                          "data": "{\n    \"input\": \"用户注册时必须绑定手机号，密码至少8位\"\n}",
+                          "type": "application/json",
+                          "generateMode": "normal"
+                        },
+                        "auth": {},
+                        "securityScheme": {},
+                        "advancedSettings": {
+                          "disabledSystemHeaders": {}
+                        },
+                        "requestResult": null,
+                        "visibility": "INHERITED",
+                        "moduleId": 7137552,
+                        "categoryId": 0,
+                        "tagIds": [],
+                        "apiTestDataList": [],
+                        "preProcessors": [],
+                        "postProcessors": [],
+                        "inheritPostProcessors": {
+                          "enable": {},
+                          "defaultEnable": {}
+                        },
+                        "inheritPreProcessors": {
+                          "enable": {},
+                          "defaultEnable": {}
+                        }
+                      }
+                    ],
+                    "mocks": [],
+                    "customApiFields": "{}",
+                    "advancedSettings": {
+                      "disabledSystemHeaders": {}
+                    },
+                    "mockScript": {},
+                    "codeSamples": [],
+                    "commonResponseStatus": {},
+                    "responseChildren": [],
+                    "visibility": "INHERITED",
+                    "moduleId": 7137552,
+                    "oasExtensions": "",
+                    "type": "http",
+                    "preProcessors": [],
+                    "postProcessors": [],
+                    "inheritPostProcessors": {},
+                    "inheritPreProcessors": {}
+                  }
+                },
+                {
+                  "name": "LCEL 链流式调用 (chain-stream)",
+                  "api": {
+                    "id": "511798326",
+                    "method": "post",
+                    "path": "/api/langchain/chain-stream",
+                    "parameters": {
+                      "path": [],
+                      "query": [],
+                      "cookie": [],
+                      "header": []
+                    },
+                    "auth": {},
+                    "securityScheme": {},
+                    "commonParameters": {},
+                    "responses": [
+                      {
+                        "id": "152012974",
+                        "code": "200",
+                        "headers": [],
+                        "jsonSchema": {
+                          "type": "string"
+                        },
+                        "itemSchema": {},
+                        "description": "文本流式输出",
+                        "contentType": "json",
+                        "mediaType": "text/plain",
+                        "oasExtensions": ""
+                      }
+                    ],
+                    "responseExamples": [
+                      {
+                        "name": "成功示例",
+                        "data": "{\n  \"action\": \"用户注册\"...",
+                        "responseId": "152012974",
+                        "description": "",
+                        "oasKey": "",
+                        "oasExtensions": ""
+                      }
+                    ],
+                    "requestBody": {
+                      "type": "application/json",
+                      "parameters": [],
+                      "jsonSchema": {
+                        "$ref": "#/definitions/311631919"
+                      },
+                      "mediaType": "application/json",
+                      "oasExtensions": "",
+                      "required": false,
+                      "additionalContentTypes": [],
+                      "examples": [
+                        {
+                          "value": "{\n    \"input\": \"用户注册时必须绑定手机号，密码至少8位\"\n}",
+                          "mediaType": "application/json",
+                          "description": ""
+                        }
+                      ]
+                    },
+                    "description": "流式逐 chunk 输出文本流 (text/plain; charset=utf-8)。输入为空时统一兜底为：'用户注册时必须绑定手机号，密码至少8位'。",
+                    "tags": [],
+                    "status": "released",
+                    "serverId": "",
+                    "operationId": "chainStream",
+                    "sourceUrl": "",
+                    "ordering": 52,
+                    "cases": [
+                      {
+                        "id": 411533863,
+                        "type": "DEBUG_CASE",
+                        "path": null,
+                        "name": "成功",
+                        "responseId": "152012974",
+                        "parameters": {
+                          "path": [],
+                          "query": [],
+                          "cookie": [],
+                          "header": []
+                        },
+                        "commonParameters": {},
+                        "requestBody": {
+                          "parameters": [],
+                          "data": "{\n    \"input\": \"用户注册时必须绑定手机号，密码至少8位\"\n}",
+                          "type": "application/json",
+                          "generateMode": "normal"
+                        },
+                        "auth": {},
+                        "securityScheme": {},
+                        "advancedSettings": {
+                          "disabledSystemHeaders": {}
+                        },
+                        "requestResult": null,
+                        "visibility": "INHERITED",
+                        "moduleId": 7137552,
+                        "categoryId": 0,
+                        "tagIds": [],
+                        "apiTestDataList": [],
+                        "preProcessors": [],
+                        "postProcessors": [],
+                        "inheritPostProcessors": {
+                          "enable": {},
+                          "defaultEnable": {}
+                        },
+                        "inheritPreProcessors": {
+                          "enable": {},
+                          "defaultEnable": {}
+                        }
+                      }
+                    ],
+                    "mocks": [],
+                    "customApiFields": "{}",
+                    "advancedSettings": {
+                      "disabledSystemHeaders": {}
+                    },
+                    "mockScript": {},
+                    "codeSamples": [],
+                    "commonResponseStatus": {},
+                    "responseChildren": [],
+                    "visibility": "INHERITED",
+                    "moduleId": 7137552,
+                    "oasExtensions": "",
+                    "type": "http",
+                    "preProcessors": [],
+                    "postProcessors": [],
+                    "inheritPostProcessors": {},
+                    "inheritPreProcessors": {}
+                  }
+                },
+                {
+                  "name": "LCEL 链批量并发调用 (chain-batch)",
+                  "api": {
+                    "id": "511798327",
+                    "method": "post",
+                    "path": "/api/langchain/chain-batch",
+                    "parameters": {
+                      "path": [],
+                      "query": [],
+                      "cookie": [],
+                      "header": []
+                    },
+                    "auth": {},
+                    "securityScheme": {},
+                    "commonParameters": {},
+                    "responses": [
+                      {
+                        "id": "177047771",
+                        "code": "200",
+                        "headers": [],
+                        "jsonSchema": {
+                          "$ref": "#/definitions/311631922"
+                        },
+                        "itemSchema": {},
+                        "description": "批量执行结果",
+                        "contentType": "json",
+                        "mediaType": "application/json",
+                        "oasExtensions": ""
+                      }
+                    ],
+                    "responseExamples": [
+                      {
+                        "name": "成功示例",
+                        "data": "{\n    \"results\": [\n        \"{\\n  \\\"action\\\": \\\"用户注册\\\",\\n  \\\"constraints\\\": [\\\"必须绑定手机号\\\", \\\"密码至少8位\\\"],\\n  \\\"entities\\\": [\\\"用户\\\", \\\"手机号\\\", \\\"密码\\\"]\\n}\",\n        \"{\\n  \\\"action\\\": \\\"商品下单\\\",\\n  \\\"constraints\\\": [\\\"必须选择收货地址\\\", \\\"最多使用1张\\\"],\\n  \\\"entities\\\": [\\\"商品\\\", \\\"收货地址\\\", \\\"优惠券\\\"]\\n}\"\n    ],\n    \"totalDurationMs\": 1520\n}",
+                        "responseId": "177047771",
+                        "description": "",
+                        "oasKey": "",
+                        "oasExtensions": ""
+                      }
+                    ],
+                    "requestBody": {
+                      "type": "application/json",
+                      "parameters": [],
+                      "jsonSchema": {
+                        "$ref": "#/definitions/311631920"
+                      },
+                      "mediaType": "application/json",
+                      "oasExtensions": "",
+                      "required": false,
+                      "additionalContentTypes": [],
+                      "examples": [
+                        {
+                          "value": "{\n    \"inputs\": [\n        \"用户注册时必须绑定手机号，密码至少8位\",\n        \"商品下单时必须选择收货地址，优惠券最多使用1张\"\n    ]\n}",
+                          "mediaType": "application/json",
+                          "description": ""
+                        }
+                      ]
+                    },
+                    "description": "批量并发执行 requirementChain。未传 inputs 时统一默认包含：'用户注册时必须绑定手机号，密码至少8位'。",
+                    "tags": [],
+                    "status": "released",
+                    "serverId": "",
+                    "operationId": "chainBatch",
+                    "sourceUrl": "",
+                    "ordering": 58,
+                    "cases": [
+                      {
+                        "id": 411533864,
+                        "type": "DEBUG_CASE",
+                        "path": null,
+                        "name": "成功",
+                        "responseId": "177047771",
+                        "parameters": {
+                          "path": [],
+                          "query": [],
+                          "cookie": [],
+                          "header": []
+                        },
+                        "commonParameters": {},
+                        "requestBody": {
+                          "parameters": [],
+                          "data": "{\n    \"inputs\": [\n        \"用户注册时必须绑定手机号，密码至少8位\",\n        \"商品下单时必须选择收货地址，优惠券最多使用1张\"\n    ]\n}",
+                          "type": "application/json",
+                          "generateMode": "normal"
+                        },
+                        "auth": {},
+                        "securityScheme": {},
+                        "advancedSettings": {
+                          "disabledSystemHeaders": {}
+                        },
+                        "requestResult": null,
+                        "visibility": "INHERITED",
+                        "moduleId": 7137552,
+                        "categoryId": 0,
+                        "tagIds": [],
+                        "apiTestDataList": [],
+                        "preProcessors": [],
+                        "postProcessors": [],
+                        "inheritPostProcessors": {
+                          "enable": {},
+                          "defaultEnable": {}
+                        },
+                        "inheritPreProcessors": {
+                          "enable": {},
+                          "defaultEnable": {}
+                        }
+                      }
+                    ],
+                    "mocks": [],
+                    "customApiFields": "{}",
+                    "advancedSettings": {
+                      "disabledSystemHeaders": {}
+                    },
+                    "mockScript": {},
+                    "codeSamples": [],
+                    "commonResponseStatus": {},
+                    "responseChildren": [],
+                    "visibility": "INHERITED",
+                    "moduleId": 7137552,
+                    "oasExtensions": "",
+                    "type": "http",
+                    "preProcessors": [],
+                    "postProcessors": [],
+                    "inheritPostProcessors": {},
+                    "inheritPreProcessors": {}
+                  }
+                },
+                {
+                  "name": "模型固定字段结构化需求抽取 (structured)",
+                  "api": {
+                    "id": "511974504",
+                    "method": "post",
+                    "path": "/api/langchain/structured",
+                    "parameters": {
+                      "header": [
+                        {
+                          "required": false,
+                          "description": "",
+                          "type": "string",
+                          "id": "YEVdOhnh10",
+                          "example": "application/json",
+                          "enable": true,
+                          "name": "Content-Type"
+                        }
+                      ]
+                    },
+                    "auth": {},
+                    "securityScheme": {},
+                    "commonParameters": {
+                      "query": [],
+                      "body": [],
+                      "cookie": [],
+                      "header": []
+                    },
+                    "responses": [
+                      {
+                        "id": "115417742",
+                        "code": 200,
+                        "name": "成功",
+                        "jsonSchema": {
+                          "type": "object",
+                          "properties": {}
+                        },
+                        "itemSchema": {},
+                        "contentType": "json"
+                      }
+                    ],
+                    "responseExamples": [
+                      {
+                        "name": "已创建",
+                        "data": "{\"action\":\"绑定手机号\",\"constraints\":[\"必须绑定手机号\",\"密码至少8位\"],\"entities\":[\"用户\",\"手机号\",\"密码\"]}",
+                        "responseId": "115417742"
+                      }
+                    ],
+                    "requestBody": {
+                      "type": "application/json",
+                      "parameters": [],
+                      "jsonSchema": {
+                        "type": "object",
+                        "properties": {}
+                      },
+                      "required": true,
+                      "mediaType": "",
+                      "examples": [
+                        {
+                          "mediaType": "application/json",
+                          "value": "{\r\n    \"input\": \"用户注册时必须绑定手机号，密码至少8位\"\r\n}"
+                        }
+                      ],
+                      "oasExtensions": ""
+                    },
+                    "description": "",
+                    "tags": [],
+                    "status": "developing",
+                    "serverId": "",
+                    "operationId": "",
+                    "sourceUrl": "",
+                    "ordering": 68,
+                    "cases": [],
+                    "mocks": [],
+                    "customApiFields": "{}",
+                    "advancedSettings": {
+                      "disabledSystemHeaders": {}
+                    },
+                    "mockScript": {},
+                    "codeSamples": [],
+                    "commonResponseStatus": {},
+                    "responseChildren": [],
+                    "visibility": "INHERITED",
+                    "moduleId": 7137552,
+                    "oasExtensions": "",
+                    "type": "http",
+                    "preProcessors": [],
+                    "postProcessors": [],
+                    "inheritPostProcessors": {},
+                    "inheritPreProcessors": {}
+                  }
+                },
+                {
+                  "name": "工具单轮绑定接口 (tool-bind)",
+                  "api": {
+                    "id": "512016732",
+                    "method": "post",
+                    "path": "/api/langchain/tool-bind",
+                    "parameters": {
+                      "header": [
+                        {
+                          "name": "Content-Type",
+                          "required": true,
+                          "example": "application/json",
+                          "description": "",
+                          "id": "Mope9Xrk9l",
+                          "type": "string",
+                          "enable": true
+                        }
+                      ]
+                    },
+                    "auth": {},
+                    "securityScheme": {},
+                    "commonParameters": {
+                      "query": [],
+                      "body": [],
+                      "cookie": [],
+                      "header": []
+                    },
+                    "responses": [
+                      {
+                        "id": "143997038",
+                        "code": 200,
+                        "name": "成功",
+                        "jsonSchema": {
+                          "type": "object",
+                          "properties": {}
+                        },
+                        "itemSchema": {},
+                        "contentType": "json"
+                      }
+                    ],
+                    "responseExamples": [
+                      {
+                        "name": "已创建",
+                        "data": "{\"content\":\"\",\"toolCalls\":[{\"id\":\"call_65a2269a4a4c47fcae3736c9\",\"name\":\"check_constraint_validity\",\"args\":{\"constraint\":\"必须绑定手机号\"}},{\"id\":\"call_38acf9ef56524ee6987ffb65\",\"name\":\"check_constraint_validity\",\"args\":{\"constraint\":\"密码至少8位\"}},{\"id\":\"call_91e2a522d4fb4f94989b7a62\",\"name\":\"lookup_entity_definition\",\"args\":{\"entity\":\"用户\"}},{\"id\":\"call_07b7af9b0d024f089a22c1cb\",\"name\":\"lookup_entity_definition\",\"args\":{\"entity\":\"手机号\"}},{\"id\":\"call_9c70eeede7e0488a8361f613\",\"name\":\"lookup_entity_definition\",\"args\":{\"entity\":\"密码\"}}],\"model\":\"qwen3.7-flash\",\"usage\":{\"inputTokens\":654,\"outputTokens\":1084,\"totalTokens\":1738}}",
+                        "responseId": "143997038"
+                      }
+                    ],
+                    "requestBody": {
+                      "type": "application/json",
+                      "parameters": [],
+                      "jsonSchema": {
+                        "type": "object",
+                        "properties": {
+                          "input": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "input"
+                        ]
+                      },
+                      "required": true,
+                      "mediaType": "",
+                      "examples": [
+                        {
+                          "mediaType": "application/json",
+                          "value": "{\"input\": \"用户注册时必须绑定手机号，密码至少8位\"}",
+                          "name": "示例"
+                        }
+                      ],
+                      "oasExtensions": ""
+                    },
+                    "description": "",
+                    "tags": [],
+                    "status": "developing",
+                    "serverId": "",
+                    "operationId": "",
+                    "sourceUrl": "",
+                    "ordering": 78,
+                    "cases": [],
+                    "mocks": [],
+                    "customApiFields": "{}",
+                    "advancedSettings": {
+                      "disabledSystemHeaders": {}
+                    },
+                    "mockScript": {},
+                    "codeSamples": [],
+                    "commonResponseStatus": {},
+                    "responseChildren": [],
+                    "visibility": "INHERITED",
+                    "moduleId": 7137552,
+                    "oasExtensions": "",
+                    "type": "http",
+                    "preProcessors": [],
+                    "postProcessors": [],
+                    "inheritPostProcessors": {},
+                    "inheritPreProcessors": {}
+                  }
+                },
+                {
+                  "name": "工具循环执行接口 (tool-loop)",
+                  "api": {
+                    "id": "512019521",
+                    "method": "post",
+                    "path": "/api/langchain/tool-loop",
+                    "parameters": {
+                      "header": [
+                        {
+                          "name": "Content-Type",
+                          "required": true,
+                          "example": "application/json",
+                          "description": "",
+                          "id": "tHdqrNnWWr",
+                          "type": "string",
+                          "enable": true
+                        }
+                      ]
+                    },
+                    "auth": {},
+                    "securityScheme": {},
+                    "commonParameters": {
+                      "query": [],
+                      "body": [],
+                      "cookie": [],
+                      "header": []
+                    },
+                    "responses": [
+                      {
+                        "id": "156824724",
+                        "code": 200,
+                        "name": "成功",
+                        "jsonSchema": {
+                          "type": "object",
+                          "properties": {}
+                        },
+                        "itemSchema": {},
+                        "contentType": "json"
+                      }
+                    ],
+                    "responseExamples": [
+                      {
+                        "name": "已创建",
+                        "data": "{\"input\":\"用户注册时必须绑定手机号，密码至少8位\",\"finalContent\":\"基于您提供的需求文本“用户注册时必须绑定手机号，密码至少8位”，结合工具调用结果，以下是完整的需求分析与结构化梳理报告：\\n\\n### 1. 需求概述\\n该需求描述了用户注册流程中的两个核心准入条件：一是身份标识的强关联（手机号），二是安全凭证的基础强度（密码长度）。\\n\\n### 2. 业务实体分析\\n根据领域标准定义，需求中涉及以下关键业务实体：\\n\\n| 实体名称 | 归属领域 | 标准定义 | 关键属性参考 |\\n| :--- | :--- | :--- | :--- |\\n| **用户** | 账户与权限 | 系统参与主体与账号持有者，具有唯一标识 UID 及安全凭证与个人资料。 | `uid`, `status`, `created_at` |\\n| **手机号** | 安全与身份认证 | 用户的法定唯一通信标识，用于安全双因子认证 (2FA)、短信验证码及敏感操作身份核验。 | `country_code`, `phone_number`, `is_verified` |\\n| **密码** | 安全凭证 | 用于用户身份鉴权与登录的核心凭证密钥，必须受密码安全强度策略限制（长度/复杂度/哈希加盐存储）。 | `salt`, `hash_algorithm`, `expired_at` |\\n\\n### 3. 约束条件校验\\n针对需求中的具体约束条款，合规性检查结果如下：\\n\\n*   **约束项 1：“必须绑定手机号”**\\n    *   **有效性**：✅ **有效**\\n    *   **执行词**：【必须】（强约束）\\n    *   **评估**：规则清晰，具备可执行性与可验收性。\\n    *   **建议**：可作为核心验收标准。建议在技术实现上明确“绑定”的具体含义（如：需完成短信验证码校验才算绑定成功）。\\n\\n*   **约束项 2：“密码至少8位”**\\n    *   **有效性**：✅ **有效**\\n    *   **执行词**：【至少】（数量下限约束）\\n    *   **评估**：规则清晰，判定逻辑明确，无歧义。\\n    *   **建议**：可作为基础验收标准。考虑到当前安全标准，建议后续评估是否增加“复杂度要求”（如大小写字母、数字组合）。\\n\\n### 4. 综合结论与架构建议\\n**结论：**\\n该需求描述**清晰、合规且有效**。约束条件使用了明确的执行词（必须、至少），避免了模糊表述，能够直接转化为测试用例和技术规格说明书中的非功能性需求。\\n\\n**架构与开发建议：**\\n1.  **手机号校验机制**：在“绑定手机号”环节，建议增加**格式校验**（正则匹配）及**真实性校验**（发送短信验证码），确保 `is_verified` 状态为真。\\n2.  **密码安全增强**：虽然“至少8位”符合当前最低合规要求，但在系统架构设计时，建议预留**密码复杂度策略配置表**，以便未来升级至“8-16位，含大小写及数字”等更高安全等级。\\n3.  **数据脱敏**：鉴于手机号属于敏感个人信息，在数据库存储及前端展示时需遵循隐私保护规范（如中间四位掩码处理）。\",\"iterations\":2,\"steps\":[{\"iteration\":1,\"toolCall\":{\"id\":\"call_c8f486a45b004ae993197826\",\"name\":\"check_constraint_validity\",\"args\":{\"constraint\":\"必须绑定手机号\"}},\"toolOutput\":\"{\\n  \\\"constraint\\\": \\\"必须绑定手机号\\\",\\n  \\\"isValid\\\": true,\\n  \\\"level\\\": \\\"strict\\\",\\n  \\\"reason\\\": \\\"包含明确的强约束关键词【必须】，判定规则清晰，具备可执行性与可验收性\\\",\\n  \\\"suggestion\\\": \\\"约束规范有效，可作为验收标准\\\"\\n}\"},{\"iteration\":1,\"toolCall\":{\"id\":\"call_5bc10056781e46788ce170b6\",\"name\":\"check_constraint_validity\",\"args\":{\"constraint\":\"密码至少8位\"}},\"toolOutput\":\"{\\n  \\\"constraint\\\": \\\"密码至少8位\\\",\\n  \\\"isValid\\\": true,\\n  \\\"level\\\": \\\"strict\\\",\\n  \\\"reason\\\": \\\"包含明确的强约束关键词【至少】，判定规则清晰，具备可执行性与可验收性\\\",\\n  \\\"suggestion\\\": \\\"约束规范有效，可作为验收标准\\\"\\n}\"},{\"iteration\":1,\"toolCall\":{\"id\":\"call_94160cc74de249bf9d6383a9\",\"name\":\"lookup_entity_definition\",\"args\":{\"entity\":\"用户\"}},\"toolOutput\":\"{\\n  \\\"entity\\\": \\\"用户\\\",\\n  \\\"found\\\": true,\\n  \\\"definition\\\": \\\"系统参与主体与账号持有者，具有唯一标识 UID 及安全凭证与个人资料。\\\",\\n  \\\"domain\\\": \\\"账户与权限\\\",\\n  \\\"attributes\\\": [\\n    \\\"uid\\\",\\n    \\\"status\\\",\\n    \\\"created_at\\\"\\n  ]\\n}\"},{\"iteration\":1,\"toolCall\":{\"id\":\"call_729952e6aed34b6abd2d688c\",\"name\":\"lookup_entity_definition\",\"args\":{\"entity\":\"手机号\"}},\"toolOutput\":\"{\\n  \\\"entity\\\": \\\"手机号\\\",\\n  \\\"found\\\": true,\\n  \\\"definition\\\": \\\"用户的法定唯一通信标识，用于安全双因子认证 (2FA)、短信验证码及敏感操作身份核验。\\\",\\n  \\\"domain\\\": \\\"安全与身份认证\\\",\\n  \\\"attributes\\\": [\\n    \\\"country_code\\\",\\n    \\\"phone_number\\\",\\n    \\\"is_verified\\\"\\n  ]\\n}\"},{\"iteration\":1,\"toolCall\":{\"id\":\"call_af7dc48fe72443c3a7794cea\",\"name\":\"lookup_entity_definition\",\"args\":{\"entity\":\"密码\"}},\"toolOutput\":\"{\\n  \\\"entity\\\": \\\"密码\\\",\\n  \\\"found\\\": true,\\n  \\\"definition\\\": \\\"用于用户身份鉴权与登录的核心凭证密钥，必须受密码安全强度策略限制（长度/复杂度/哈希加盐存储）。\\\",\\n  \\\"domain\\\": \\\"安全凭证\\\",\\n  \\\"attributes\\\": [\\n    \\\"salt\\\",\\n    \\\"hash_algorithm\\\",\\n    \\\"expired_at\\\"\\n  ]\\n}\"}],\"model\":\"qwen3.7-flash\",\"usage\":{\"inputTokens\":1222,\"outputTokens\":1017,\"totalTokens\":2239}}",
+                        "responseId": "156824724"
+                      }
+                    ],
+                    "requestBody": {
+                      "type": "application/json",
+                      "parameters": [],
+                      "jsonSchema": {
+                        "type": "object",
+                        "properties": {
+                          "input": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "input"
+                        ]
+                      },
+                      "required": true,
+                      "mediaType": "",
+                      "examples": [
+                        {
+                          "mediaType": "application/json",
+                          "value": "{\"input\": \"用户注册时必须绑定手机号，密码至少8位\"}",
+                          "name": "示例"
+                        }
+                      ],
+                      "oasExtensions": ""
+                    },
+                    "description": "",
+                    "tags": [],
+                    "status": "developing",
+                    "serverId": "",
+                    "operationId": "",
+                    "sourceUrl": "",
+                    "ordering": 88,
+                    "cases": [],
+                    "mocks": [],
+                    "customApiFields": "{}",
+                    "advancedSettings": {
+                      "disabledSystemHeaders": {}
+                    },
+                    "mockScript": {},
+                    "codeSamples": [],
+                    "commonResponseStatus": {},
+                    "responseChildren": [],
+                    "visibility": "INHERITED",
+                    "moduleId": 7137552,
+                    "oasExtensions": "",
+                    "type": "http",
+                    "preProcessors": [],
+                    "postProcessors": [],
+                    "inheritPostProcessors": {},
+                    "inheritPreProcessors": {}
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "socketCollection": [],
+  "docCollection": [],
+  "webSocketCollection": [],
+  "socketIOCollection": [],
+  "mcpClientCollection": [],
+  "responseCollection": [],
+  "schemaCollection": [
+    {
+      "id": 18430011,
+      "name": "根目录",
+      "visibility": "SHARED",
+      "moduleId": 7137552,
+      "items": [
+        {
+          "id": 21146495,
+          "name": "autix",
+          "visibility": "INHERITED",
+          "moduleId": 7137552,
+          "items": [
+            {
+              "name": "InvokeDto",
+              "displayName": "",
+              "id": "#/definitions/311631919",
+              "description": "",
+              "schema": {
+                "jsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "input": {
+                      "type": "string",
+                      "description": "用户输入需求文本，为空时兜底为：'用户注册时必须绑定手机号，密码至少8位'",
+                      "examples": [
+                        "用户注册时必须绑定手机号，密码至少8位"
+                      ]
+                    }
+                  },
+                  "x-apifox-orders": [
+                    "input"
+                  ]
+                }
+              },
+              "visibility": "INHERITED",
+              "moduleId": 7137552
+            },
+            {
+              "name": "BatchDto",
+              "displayName": "",
+              "id": "#/definitions/311631920",
+              "description": "",
+              "schema": {
+                "jsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "inputs": {
+                      "type": "array",
+                      "description": "批量输入需求文本列表，为空时默认使用包含单条默认需求的数组",
+                      "items": {
+                        "type": "string"
+                      },
+                      "examples": [
+                        [
+                          "用户注册时必须绑定手机号，密码至少8位"
+                        ]
+                      ]
+                    }
+                  },
+                  "x-apifox-orders": [
+                    "inputs"
+                  ]
+                }
+              },
+              "visibility": "INHERITED",
+              "moduleId": 7137552
+            },
+            {
+              "name": "ChainInvokeResult",
+              "displayName": "",
+              "id": "#/definitions/311631921",
+              "description": "",
+              "schema": {
+                "jsonSchema": {
+                  "type": "object",
+                  "required": [
+                    "content"
+                  ],
+                  "properties": {
+                    "content": {
+                      "type": "string",
+                      "description": "经 StringOutputParser 转换后的模型输出纯文本内容"
+                    }
+                  },
+                  "x-apifox-orders": [
+                    "content"
+                  ]
+                }
+              },
+              "visibility": "INHERITED",
+              "moduleId": 7137552
+            },
+            {
+              "name": "ChainBatchResult",
+              "displayName": "",
+              "id": "#/definitions/311631922",
+              "description": "",
+              "schema": {
+                "jsonSchema": {
+                  "type": "object",
+                  "required": [
+                    "results",
+                    "totalDurationMs"
+                  ],
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "description": "批量抽取的纯文本结果列表",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "totalDurationMs": {
+                      "type": "number",
+                      "description": "批量处理总耗时（毫秒）"
+                    }
+                  },
+                  "x-apifox-orders": [
+                    "results",
+                    "totalDurationMs"
+                  ]
+                }
+              },
+              "visibility": "INHERITED",
+              "moduleId": 7137552
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "securitySchemeCollection": [],
+  "oasComponentCollection": [],
+  "requestCollection": [
+    {
+      "name": "根目录",
+      "children": [],
+      "ordering": [
+        "requestFolder.8412241"
+      ],
+      "items": []
+    }
+  ],
+  "environments": [
+    {
+      "name": "chat-service",
+      "requestProxyAgentSettings": {},
+      "variables": [],
+      "parameters": {
+        "cookie": [],
+        "query": [],
+        "header": [],
+        "body": []
+      },
+      "type": "normal",
+      "visibility": "protected",
+      "ordering": 40,
+      "tags": [
+        {
+          "name": "",
+          "color": "#1890FF"
+        }
+      ],
+      "advancedSettings": {},
+      "id": "48853464",
+      "baseUrl": "http://localhost:4001",
+      "baseUrls": {
+        "7137552": "http://localhost:4001"
+      },
+      "socketioBaseUrls": {},
+      "websocketBaseUrls": {}
+    }
+  ],
+  "commonScripts": [],
+  "globalVariables": [],
+  "commonParameters": null,
+  "customFunctions": [],
+  "projectTestCaseCategories": [
+    {
+      "id": 7863542,
+      "name": "正向",
+      "description": "有效的输入和正确的预期结果,代表典型的用法。"
+    },
+    {
+      "id": 7863543,
+      "name": "负向",
+      "description": "消极的、无效的输入,如缺少字段、错误的类型、不支持的方法等。"
+    },
+    {
+      "id": 7863544,
+      "name": "边界值",
+      "description": "极端或边缘条件,如最大字符串长度、空值、零、null等"
+    },
+    {
+      "id": 7863545,
+      "name": "安全性",
+      "description": "可能暴露API安全性风险的测试用例。"
+    },
+    {
+      "id": 7863546,
+      "name": "其他",
+      "description": "其他未归属的测试用例。"
+    }
+  ],
+  "projectTestCaseTags": [
+    {
+      "id": 31060844,
+      "name": "仅传必要字段",
+      "description": "仅发送具有有效值的必填字段,省略所有可选字段,以测试最小有效请求。"
+    },
+    {
+      "id": 31060845,
+      "name": "语义合法",
+      "description": "使用语法正确且在业务逻辑或域上下文中也有意义的值。"
+    },
+    {
+      "id": 31060846,
+      "name": "覆盖枚举组合",
+      "description": "对所有枚举型参数,应用正交设计系统地构建参数及其枚举值的测试用例组合,专用于测试枚举覆盖率"
+    },
+    {
+      "id": 31060847,
+      "name": "其他正向",
+      "description": "提供符合API规范的真实有效的输入,产生正确和预期的结果。"
+    },
+    {
+      "id": 31060848,
+      "name": "缺失必填字段",
+      "description": "在请求主体或参数中省略一个或多个必需字段。"
+    },
+    {
+      "id": 31060849,
+      "name": "无效值",
+      "description": "提供的值类型和格式正确,但在逻辑上对该字段无效。"
+    },
+    {
+      "id": 31060850,
+      "name": "类型错误",
+      "description": "使用数据类型不正确的值,例如发送字符串而不是整数。"
+    },
+    {
+      "id": 31060851,
+      "name": "格式错误",
+      "description": "以不正确的格式提供值,例如,错误的日期模式,格式错误的电子邮件地址。"
+    },
+    {
+      "id": 31060852,
+      "name": "语义非法",
+      "description": "使用语法正确且格式正确的值,这些值在逻辑上不可能或违反域规则。"
+    },
+    {
+      "id": 31060853,
+      "name": "其他负向",
+      "description": "提供无效或意外的输入,应触发错误处理或拒绝API。"
+    },
+    {
+      "id": 31060854,
+      "name": "Null",
+      "description": "必须是 JSON 字面量 `null`(不是空的,也不是 \"null\")。"
+    },
+    {
+      "id": 31060855,
+      "name": "零值",
+      "description": "必须是数字字面值0。"
+    },
+    {
+      "id": 31060856,
+      "name": "空值",
+      "description": "必须是\"\"。"
+    },
+    {
+      "id": 31060857,
+      "name": "极大值",
+      "description": "Max/min值 - 为数字或日期字段提供精确的最小值和最大值。"
+    },
+    {
+      "id": 31060858,
+      "name": "极小值",
+      "description": "Max/min值 - 为数字或日期字段提供精确的最小值和最大值。"
+    },
+    {
+      "id": 31060859,
+      "name": "超出最大边界值",
+      "description": "过长/过短字符串 - 提供超出允许的最小或最大边界的值。"
+    },
+    {
+      "id": 31060860,
+      "name": "超出最小边界值",
+      "description": "过长/过短字符串 - 提供超出允许的最小或最大边界的值。"
+    },
+    {
+      "id": 31060861,
+      "name": "字符串过长",
+      "description": "超出范围的值 - 提供大于允许的最大长度或小于要求的最小长度的字符串。"
+    },
+    {
+      "id": 31060862,
+      "name": "字符串过短",
+      "description": "超出范围的值 - 提供大于允许的最大长度或小于要求的最小长度的字符串。"
+    },
+    {
+      "id": 31060863,
+      "name": "对象级别授权缺失",
+      "description": "对象级别授权缺失 - 用户在没有适当授权的情况下访问或操作数据对象。"
+    },
+    {
+      "id": 31060864,
+      "name": "访问控制",
+      "description": "基于角色、权限或属性来限制用户能访问哪些资源、能执行哪些操作"
+    },
+    {
+      "id": 31060865,
+      "name": "认证失败",
+      "description": "认证失败 - 认证薄弱、配置错误或被绕过,导致未授权访问。"
+    },
+    {
+      "id": 31060866,
+      "name": "SQL注入",
+      "description": "在输入字段中插入恶意SQL代码,测试是否存在SQL注入漏洞。"
+    },
+    {
+      "id": 31060867,
+      "name": "XSS注入",
+      "description": "注入JavaScript或HTML标签来测试跨站点脚本漏洞。"
+    },
+    {
+      "id": 31060868,
+      "name": "模糊输入",
+      "description": "发送大型或随机生成的有效载荷,以测试输入的有效性和稳定性。"
+    },
+    {
+      "id": 31060869,
+      "name": "命令行注入",
+      "description": "将shell命令插入输入以测试命令执行漏洞。"
+    },
+    {
+      "id": 31060870,
+      "name": "JSON注入",
+      "description": "插入恶意或意外的JSON结构来测试解析和验证。"
+    },
+    {
+      "id": 31060871,
+      "name": "NoSQL注入",
+      "description": "提供NoSQL特定的恶意查询或操作符来测试注入漏洞。"
+    },
+    {
+      "id": 31060872,
+      "name": "其他",
+      "description": "其他未归属的测试用例。"
+    }
+  ],
+  "projectAssociations": [],
+  "moduleSettings": [
+    {
+      "id": "7137552",
+      "name": "默认模块",
+      "description": "基于 LangChain LCEL requirementPrompt.pipe(model).pipe(new StringOutputParser()) 构建的最小调用链测试接口集合，可直接导入 Apifox 进行联调与自动化测试。",
+      "moduleVariables": [],
+      "openApiInfo": {}
+    }
+  ]
+}
