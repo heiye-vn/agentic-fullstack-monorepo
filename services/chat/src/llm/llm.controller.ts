@@ -1,6 +1,8 @@
 import { Controller, Post, Body, Res } from '@nestjs/common';
 import type { Response } from 'express';
-import { LlmService } from './llm.service.js';
+import { LlmService, DEFAULT_USER_INPUT } from './llm.service.js';
+import { RequirementService } from './requirement.service.js';
+import type { RequirementResult } from '@autix/contracts';
 import type {
   InvokeResult,
   BatchResult,
@@ -25,7 +27,10 @@ interface BatchDto {
 
 @Controller('api/langchain')
 export class LlmController {
-  constructor(private readonly llmService: LlmService) {}
+  constructor(
+    private readonly llmService: LlmService,
+    private readonly requirementService?: RequirementService,
+  ) {}
 
   /**
    * POST /api/langchain/invoke
@@ -158,5 +163,17 @@ export class LlmController {
   ): Promise<ChainBatchResult> {
     return this.llmService.chainBatch(body?.inputs);
   }
+
+  /**
+   * POST /api/langchain/structured
+   * 需求结构化抽取接口，模型返回符合 RequirementResultSchema 契约的固定字段格式
+   */
+  @Post('structured')
+  async structured(@Body() body?: InvokeDto): Promise<RequirementResult> {
+    const input = body?.input?.trim() || DEFAULT_USER_INPUT;
+    const service = this.requirementService ?? new RequirementService();
+    return service.extract(input);
+  }
 }
+
 

@@ -121,6 +121,50 @@
           }
         }
       }
+    },
+    "/api/langchain/structured": {
+      "post": {
+        "summary": "模型固定字段结构化需求抽取 (structured)",
+        "description": "基于 ChatPromptTemplate.fromMessages 与 model.withStructuredOutput(RequirementResultSchema) 构建的固定字段抽取接口。输入为空时统一兜底为：'用户注册时必须绑定手机号，密码至少8位'。",
+        "operationId": "structured",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvokeDto"
+              },
+              "example": {
+                "input": "用户注册时必须绑定手机号，密码至少8位"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "结构化提取结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequirementResult"
+                },
+                "example": {
+                  "action": "用户注册",
+                  "constraints": [
+                    "必须绑定手机号",
+                    "密码至少8位"
+                  ],
+                  "entities": [
+                    "用户",
+                    "手机号",
+                    "密码"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -174,6 +218,40 @@
           "totalDurationMs": {
             "type": "number",
             "description": "批量处理总耗时（毫秒）"
+          }
+        }
+      },
+      "RequirementResult": {
+        "type": "object",
+        "required": ["action", "constraints", "entities"],
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "唯一核心动作（动词+对象）",
+            "example": "用户注册"
+          },
+          "constraints": {
+            "type": "array",
+            "description": "明确约束列表（必须/至少/不得/不能）",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "必须绑定手机号",
+              "密码至少8位"
+            ]
+          },
+          "entities": {
+            "type": "array",
+            "description": "文本中真实出现的名词实体列表",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "用户",
+              "手机号",
+              "密码"
+            ]
           }
         }
       }
