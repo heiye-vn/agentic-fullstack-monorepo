@@ -127,30 +127,6 @@ pnpm run typecheck
 
 ---
 
-## 🌐 服务端口与接口矩阵
-
-| 服务 / 应用 | 运行端口 | 核心路由端点 | 说明与职责 |
-| :--- | :--- | :--- | :--- |
-| **chat-web** | `3002` | `/` | Linear 风格 AI 需求分析与 LangChain 调试工作台 |
-| **admin-web** | `3100` | `/login`, `/dashboard`, `/users` 等 | RBAC 企业级权限中台控制中心 |
-| **chat** | `4001` | `GET /health` | 服务健康检查探针 |
-| **chat** | `4001` | `GET /hello` | 基础微服务联通性端点 |
-| **chat** | `4001` | `POST /requirement/extract` | 智能体需求抽取核心接口（返回结构化 `RequirementResult`） |
-| **chat** | `4001` | `POST /api/langchain/invoke` | LangChain 单次调用基础接口 |
-| **chat** | `4001` | `POST /api/langchain/stream` | LangChain 流式推理接口 (SSE text/plain) |
-| **chat** | `4001` | `POST /api/langchain/batch` | LangChain 批量并发推理接口 |
-| **chat** | `4001` | `POST /api/langchain/prompt-preview` | PromptTemplate 提示词渲染预览（不触发 LLM） |
-| **chat** | `4001` | `POST /api/langchain/chain-invoke` | LCEL 管道流转调用接口 |
-| **chat** | `4001` | `POST /api/langchain/chain-stream` | LCEL 管道流式输出接口 |
-| **chat** | `4001` | `POST /api/langchain/structured` | 基于 Zod 契约的大模型结构化抽取输出 |
-| **chat** | `4001` | `POST /api/langchain/tool-bind` | LangChain 模型单轮工具绑定调用 |
-| **chat** | `4001` | `POST /api/langchain/tool-loop` | 智能体多轮自动工具循环调度（Tool Loop / ReAct Loop） |
-| **user-system** | `4002` | `POST /auth/login` | 用户名密码登录与双 Token 发放 |
-| **user-system** | `4002` | `POST /auth/refresh` | 无感刷新 Access Token |
-| **user-system** | `4002` | `/users`, `/roles`, `/depts`, `/logs` | RBAC 基础资源 CRUD 与细粒度权限控制 |
-
----
-
 ## 🤖 Chapter 03: LangChain 需求分析链与 AI 智能体工作台
 
 在第三阶段，项目全面引入 **LangChain v0.3+** 与 **LCEL（LangChain Expression Language）** 架构，实现了从基础模型调用到智能需求抽取、工具循环执行的工业级落地：
@@ -159,16 +135,16 @@ pnpm run typecheck
 
 - **LCEL 链式管道架构**：通过 `prompt.pipe(model).pipe(outputParser)` 编排声明式调用链，天然具备流式（Stream）、批处理（Batch）与单次调用（Invoke）一致性。
 - **Zod 驱动的类型级结构化输出**：
-  - 定义统一契约 [`packages/contracts`](file:///d:/ZSP/Study/Ai%20Agent/agentic-fullstack-monorepo/packages/contracts/src/index.ts) 中的 `RequirementSchema`：强制解析 `action`（核心动作）、`constraints`（约束列表）、`entities`（实体要素）。
+  - 定义统一契约 [`packages/contracts`](./packages/contracts/src/index.ts) 中的 `RequirementSchema`：强制解析 `action`（核心动作）、`constraints`（约束列表）、`entities`（实体要素）。
   - 利用 `withStructuredOutput` 保证大模型 100% 遵守 JSON 契约结构，彻底摆脱传统正则匹配与脏 JSON 解析。
 - **智能工具绑定与自动循环机制（Tool Loop）**：
   - 封装规范的 LangChain Tools（计算器、词频统计、格式清洗等）。
   - 实现基于 `AIMessage.tool_calls` 的自动调度循环（ReAct Loop），自动向模型回传 ToolMessage，直至输出最终需求分析结论。
 - **Linear 曜石黑沉浸式工作台**：
-  - 前端位于 [`clients/chat-web`](file:///d:/ZSP/Study/Ai%20Agent/agentic-fullstack-monorepo/clients/chat-web)，重构为左右双栏分屏工作台。
+  - 前端位于 [`clients/chat-web`](./clients/chat-web)，重构为左右双栏分屏工作台。
   - 左侧配置面板与多功能调用触发器；右侧提供支持 JSON 语法高亮、实时 SSE 文本流、卡片式结构化结果及 Tool 调试折叠面板的智能终端面板。
 - **Apifox 接口规范资产**：
-  - 在 [`services/chat/apifox-chain-api.json`](file:///d:/ZSP/Study/Ai%20Agent/agentic-fullstack-monorepo/services/chat/apifox-chain-api.json) 中内置全套 API 调试文件，开箱即用。
+  - 在 [`services/chat/apifox-chain-api.json`](./services/chat/apifox-chain-api.json) 中内置全套 API 调试文件，开箱即用。
 
 ---
 
@@ -209,7 +185,7 @@ pnpm dev:rbac
 
 ## 🐳 Docker 容器化编排
 
-项目所有容器配置文件集中存放在 [`infra/compose`](file:///d:/ZSP/Study/Ai%20Agent/agentic-fullstack-monorepo/infra/compose) 目录下。
+项目所有容器配置文件集中存放在 [`infra/compose`](./infra/compose) 目录下。
 
 ### 生产容器编排启动
 
@@ -224,4 +200,5 @@ docker compose -f infra/compose/compose.yaml up --build
 ```bash
 docker compose -f infra/compose/compose.dev.yaml up
 ```
+
 
