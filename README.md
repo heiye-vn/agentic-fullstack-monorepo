@@ -1,148 +1,183 @@
 # Autix Monorepo
 
-基于 **pnpm workspaces** + **Turborepo** 构建的全栈多包架构（Monorepo）项目，集成了 **Next.js (App Router)** 前端客户端、**NestJS** 后端微服务、**TypeScript 编译产物共享包** 以及完整的 **Docker Compose** 容器编排支持。
+基于 **pnpm workspaces** + **Turborepo** 构建的企业级全栈多包架构（Monorepo）项目，集成了 **Next.js 16 (App Router)** 现代化前端工作台、**NestJS** 微服务集群、**Prisma + PostgreSQL** 数据持久层、**LangChain LCEL** 大模型调用链，以及 **TypeScript 共享类型契约** 和 **Docker Compose** 容器化编排。
 
 ---
 
-## 🎯 项目背景与定位
+## 🎯 项目背景与阶段规划
 
-本项目用于 **AI Agent（人工智能体）开发实践与技术探索**。
+本项目用于 **AI Agent（人工智能体）全栈落地开发实践与技术探索**，采用分阶段渐进式演进路线：
 
-目前阶段已完成工程化底座的搭建，构建了一套结构清晰、类型共享、支持容器化部署的全栈 Monorepo 基础架构；后续将在此底座之上，逐步扩展并落地 AI 对话、工具调用与 Agent 智能体等相关核心能力。
+- **Chapter 01: 全栈工程化底座**：搭建基于 pnpm + Turborepo 的多包工作区，实现类型契约跨端共享、独立 Dockerfile 打包与本地容器热更新。
+- **Chapter 02: 企业级 RBAC 权限管控系统**：基于 PostgreSQL + Prisma 落地双 Token 轮转鉴权、细粒度权限守卫、用户与组织树管理、操作审计及 Next.js 16 Proxy 管理中台。
+- **Chapter 03: LangChain 链式调用与 AI 需求工作台**：构建基于 LangChain Expression Language (LCEL) 的提示词管道、流式 SSE 响应、Zod 结构化抽取、自动工具循环（Tool Loop），并提供 Linear 曜石黑风格的前端交互工作台。
 
 ---
 
-## 目录结构
+## 📂 项目全景目录
 
 ```text
 .
 ├── clients/
-│   └── chat-web/             # Next.js (App Router) 前端应用 (端口 3002)
+│   ├── chat-web/             # [Next.js 16] AI 需求分析双栏工作台 (端口 3002)
+│   └── admin-web/            # [Next.js 16 + HeroUI] RBAC 权限管理控制中心 (端口 3100)
 ├── services/
-│   └── chat/                 # NestJS 后端微服务 (端口 4001)
+│   ├── chat/                 # [NestJS] AI 与 LangChain 智能体服务 (端口 4001)
+│   └── user-system/          # [NestJS + Prisma] 认证鉴权与用户权限微服务 (端口 4002)
 ├── packages/
-│   └── contracts/            # 共享契约与公用库 (采用 tsc 编译产物 dist 模式)
+│   └── contracts/            # TypeScript 共享数据类型契约与 Zod Schema
 ├── infra/
-│   └── compose/              # 容器化编排与 Dockerfile 配置
-│       ├── Dockerfile.chat   # NestJS 后端镜像构建定义
-│       ├── Dockerfile.web    # Next.js 前端独立运行时镜像构建定义
-│       ├── compose.yaml      # 生产环境 Compose 编排文件
-│       └── compose.dev.yaml  # 开发热更新 Compose 编排文件
-├── pnpm-workspace.yaml       # pnpm monorepo 工作区定义
-├── turbo.json                # Turborepo 任务编排与依赖拓扑配置
-├── tsconfig.base.json        # 基础 TypeScript 编译配置与 paths 映射
-└── package.json              # 根项目配置与常用运行脚本
+│   └── compose/              # Dockerfile 镜像构建与 Docker Compose 容器编排
+│       ├── Dockerfile.chat   # chat 服务构建镜像
+│       ├── Dockerfile.web    # 前端独立运行时镜像
+│       ├── compose.yaml      # 生产容器环境编排
+│       └── compose.dev.yaml  # 开发热重载与 PostgreSQL 容器编排
+├── pnpm-workspace.yaml       # pnpm monorepo 工作区配置
+├── turbo.json                # Turborepo 任务编排与依赖拓扑流水线
+├── tsconfig.base.json        # 基础 TypeScript 编译与路径别名配置
+└── package.json              # 根工程脚本与统一包管理器配置
 ```
 
 ---
 
-## 技术栈与设计亮点
+## 🛠️ 技术栈清单
 
-- **包管理器**：`pnpm@10.12.1`（利用硬链接节省磁盘空间，严格规范 phantom dependencies）
-- **构建流水线**：`Turborepo` 统一驱动 `build`、`dev`、`typecheck` 等跨包任务，利用拓扑图自动解析构建先后依赖
-- **共享契约模式**：`@autix/contracts` 采用标准 CommonJS 编译产物模式（输出至 `dist/`，包含 `.d.ts` 与 Source Map），兼容 ESM 与 Node.js 模块生态
-- **前端客户端**：Next.js App Router 架构，配置 `output: "standalone"` 与根目录依赖追踪（`outputFileTracingRoot`）
-- **后端微服务**：NestJS，显式监听 `4001` 端口，集成 CORS 放行 `http://localhost:3002`，提供 `/health` 与 `/hello` 接口
-- **容器化支持**：基于 `node:22-alpine` 与 `corepack`，具备生产独立镜像、健康检查依赖（`service_healthy`）与本地开发源码卷挂载热更新能力
+- **Monorepo 管理**：`pnpm workspaces` + `Turborepo` 统一驱动任务拓扑构建与依赖硬链接
+- **前端工程**：Next.js 16 (Turbopack, App Router)、React 19、Tailwind CSS、HeroUI、Lucide Icons
+- **后端框架**：NestJS 12 (TypeScript, Express 适配器, Module / Controller / Service 分层)
+- **AI 与大模型生态**：`@langchain/core`、`@langchain/openai`、`zod` (LCEL 管道、结构化输出、Tool Loop)
+- **数据持久层**：PostgreSQL 16、Prisma ORM (Schema 迁移、种子填充、类型生成)
+- **共享契约模式**：`@autix/contracts` 标准 CommonJS / TypeScript 输出，保证前后端零沟通成本契约对齐
+- **容器化与运维**：Docker & Docker Compose、Alpine 极简镜像分阶段构建
 
 ---
 
-## 环境要求
+## ⚡ 快速上手
+
+### 1. 环境准备
 
 - **Node.js**：`>= 22.0.0`
-- **pnpm**：`>= 10.0.0`（推荐 `10.12.1` 或最新版）
-- **Docker & Docker Compose**（可选，用于容器化运行）
+- **pnpm**：`>= 10.0.0`
+- **Docker & Docker Compose**（可选，用于一键拉起 PostgreSQL 及容器化部署）
 
----
-
-## 快速上手
-
-### 1. 安装项目依赖
-
-在项目根目录下执行：
+在根目录下安装全量工作区依赖：
 
 ```bash
 pnpm install
 ```
 
-pnpm 会自动解析 `clients/*`、`services/*`、`packages/*` 下的包并将 `@autix/contracts` 软链至各个应用。
+### 2. 环境变量配置
 
-### 2. 本地并发开发
+请在对应服务目录下建立 `.env` 配置文件：
 
-在根目录执行以下命令，Turborepo 会自动并发启动前端与后端：
+- **`services/chat/.env`**：
+  ```env
+  MODEL_NAME=gpt-4o-mini
+  OPENAI_API_KEY=sk-your-key
+  OPENAI_BASE_URL=https://api.openai.com/v1
+  PORT=4001
+  ```
+- **`services/user-system/.env`**：
+  ```env
+  DATABASE_URL="postgresql://postgres:postgres@localhost:5432/autix_db?schema=public"
+  JWT_SECRET="your-super-secret-jwt-key"
+  JWT_REFRESH_SECRET="your-super-secret-refresh-key"
+  PORT=4002
+  ```
+
+---
+
+## 🚀 启动与构建指令
+
+### 一键启动模式
 
 ```bash
+# 并发启动工作区所有服务 (chat, user-system, chat-web, admin-web)
 pnpm dev
+
+# 一键并发启动 RBAC 权限管理系统 (user-system + admin-web)
+pnpm dev:rbac
 ```
 
-- **Next.js Web 客户端**：访问 [http://localhost:3002](http://localhost:3002)
-- **NestJS Chat 服务**：访问 [http://localhost:4001](http://localhost:4001)
-
-### 3. 单独启动子项目
-
-若仅需单独启动前端或后端，可直接运行：
+### 独立子系统启动
 
 ```bash
-# 仅启动 Next.js 前端 (端口 3002)
+# 启动 AI 智能体工作台前端 (端口 3002)
 pnpm dev:chat-web
 
-# 仅启动 NestJS 后端 (端口 4001)
+# 启动 AI 智能体后端服务 (端口 4001)
 pnpm dev:chat
+
+# 启动 RBAC 权限系统管理前端 (端口 3100)
+pnpm dev:admin-web
+
+# 启动 RBAC 用户与鉴权微服务 (端口 4002)
+pnpm dev:user-system
 ```
 
-### 4. 构建与类型检查
+### 全局编译构建与类型检查
 
 ```bash
-# 按照拓扑图执行全量构建 (contracts -> chat-web & chat)
+# 依据 Turborepo 拓扑依赖全量构建各模块
 pnpm run build
 
-# 全局 TypeScript 静态类型检查
+# 全工作区执行 TypeScript 静态类型检查
 pnpm run typecheck
 ```
 
 ---
 
-## 服务端口与接口规范
+## 🌐 服务端口与接口矩阵
 
-| 服务 / 模块 | 运行端口 | 路由端点 | 描述 |
+| 服务 / 应用 | 运行端口 | 核心路由端点 | 说明与职责 |
 | :--- | :--- | :--- | :--- |
-| **chat-web** | `3002` | `/` | Web 前端界面，展示共享常量并提供调用按钮 |
-| **chat** | `4001` | `GET /health` | 服务健康检查端点，返回 `{ "ok": true }` |
-| **chat** | `4001` | `GET /hello` | 业务问候端点，返回 `{ "message": "Hello from Chat, shared APP_NAME=llm" }` |
+| **chat-web** | `3002` | `/` | Linear 风格 AI 需求分析与 LangChain 调试工作台 |
+| **admin-web** | `3100` | `/login`, `/dashboard`, `/users` 等 | RBAC 企业级权限中台控制中心 |
+| **chat** | `4001` | `GET /health` | 服务健康检查探针 |
+| **chat** | `4001` | `GET /hello` | 基础微服务联通性端点 |
+| **chat** | `4001` | `POST /requirement/extract` | 智能体需求抽取核心接口（返回结构化 `RequirementResult`） |
+| **chat** | `4001` | `POST /api/langchain/invoke` | LangChain 单次调用基础接口 |
+| **chat** | `4001` | `POST /api/langchain/stream` | LangChain 流式推理接口 (SSE text/plain) |
+| **chat** | `4001` | `POST /api/langchain/batch` | LangChain 批量并发推理接口 |
+| **chat** | `4001` | `POST /api/langchain/prompt-preview` | PromptTemplate 提示词渲染预览（不触发 LLM） |
+| **chat** | `4001` | `POST /api/langchain/chain-invoke` | LCEL 管道流转调用接口 |
+| **chat** | `4001` | `POST /api/langchain/chain-stream` | LCEL 管道流式输出接口 |
+| **chat** | `4001` | `POST /api/langchain/structured` | 基于 Zod 契约的大模型结构化抽取输出 |
+| **chat** | `4001` | `POST /api/langchain/tool-bind` | LangChain 模型单轮工具绑定调用 |
+| **chat** | `4001` | `POST /api/langchain/tool-loop` | 智能体多轮自动工具循环调度（Tool Loop / ReAct Loop） |
+| **user-system** | `4002` | `POST /auth/login` | 用户名密码登录与双 Token 发放 |
+| **user-system** | `4002` | `POST /auth/refresh` | 无感刷新 Access Token |
+| **user-system** | `4002` | `/users`, `/roles`, `/depts`, `/logs` | RBAC 基础资源 CRUD 与细粒度权限控制 |
 
 ---
 
-## Docker 容器化编排
+## 🤖 Chapter 03: LangChain 需求分析链与 AI 智能体工作台
 
-项目所有容器配置文件集中存放在 [infra/compose](file:///d:/ZSP/Study/Ai%20Agent/new_project/infra/compose) 目录下。
+在第三阶段，项目全面引入 **LangChain v0.3+** 与 **LCEL（LangChain Expression Language）** 架构，实现了从基础模型调用到智能需求抽取、工具循环执行的工业级落地：
 
-### 生产容器编排启动
+### 1. 核心技术亮点
 
-包含后端 `/health` 健康检查，前端服务将在后端状态就绪（`service_healthy`）后自动唤醒：
-
-```bash
-docker compose -f infra/compose/compose.yaml up --build
-```
-
-### 本地开发热更新模式
-
-通过挂载宿主机源码卷到容器内，支持代码修改后实时重载：
-
-```bash
-docker compose -f infra/compose/compose.dev.yaml up
-```
+- **LCEL 链式管道架构**：通过 `prompt.pipe(model).pipe(outputParser)` 编排声明式调用链，天然具备流式（Stream）、批处理（Batch）与单次调用（Invoke）一致性。
+- **Zod 驱动的类型级结构化输出**：
+  - 定义统一契约 [`packages/contracts`](file:///d:/ZSP/Study/Ai%20Agent/agentic-fullstack-monorepo/packages/contracts/src/index.ts) 中的 `RequirementSchema`：强制解析 `action`（核心动作）、`constraints`（约束列表）、`entities`（实体要素）。
+  - 利用 `withStructuredOutput` 保证大模型 100% 遵守 JSON 契约结构，彻底摆脱传统正则匹配与脏 JSON 解析。
+- **智能工具绑定与自动循环机制（Tool Loop）**：
+  - 封装规范的 LangChain Tools（计算器、词频统计、格式清洗等）。
+  - 实现基于 `AIMessage.tool_calls` 的自动调度循环（ReAct Loop），自动向模型回传 ToolMessage，直至输出最终需求分析结论。
+- **Linear 曜石黑沉浸式工作台**：
+  - 前端位于 [`clients/chat-web`](file:///d:/ZSP/Study/Ai%20Agent/agentic-fullstack-monorepo/clients/chat-web)，重构为左右双栏分屏工作台。
+  - 左侧配置面板与多功能调用触发器；右侧提供支持 JSON 语法高亮、实时 SSE 文本流、卡片式结构化结果及 Tool 调试折叠面板的智能终端面板。
+- **Apifox 接口规范资产**：
+  - 在 [`services/chat/apifox-chain-api.json`](file:///d:/ZSP/Study/Ai%20Agent/agentic-fullstack-monorepo/services/chat/apifox-chain-api.json) 中内置全套 API 调试文件，开箱即用。
 
 ---
 
 ## 🔐 Chapter 02: RBAC 权限管控系统
 
-本项目在第二阶段集成了企业级 RBAC（基于角色的访问控制）权限管理系统，涵盖前后端全链路安全鉴权闭环。
-
-### 模块架构
-- **后端服务**：[`services/user-system`](file:///d:/ZSP/Study/Ai%20Agent/agentic-fullstack-monorepo/services/user-system)（NestJS + Prisma + PostgreSQL，端口 `4002`）
-- **管理前端**：[`clients/admin-web`](file:///d:/ZSP/Study/Ai%20Agent/agentic-fullstack-monorepo/clients/admin-web)（Next.js 16 + HeroUI + Tailwind 4 + Proxy，端口 `3100`）
+在第二阶段，项目集成了企业级 RBAC（基于角色的访问控制）权限管理系统，涵盖前后端全链路安全鉴权闭环：
 
 ### 快速启动 RBAC 全套系统
+
 ```bash
 # 1. 启动本地 PostgreSQL 容器
 docker compose -f infra/compose/compose.dev.yaml up -d postgres
@@ -156,15 +191,37 @@ pnpm dev:rbac
 ```
 
 ### 预设测试账号与角色
+
 | 账号 | 密码 | 角色 | 权限范围 |
 | :--- | :--- | :--- | :--- |
-| `admin` | `Admin123!` | `super_admin` | 全局完全支配权限（包含 `*:*:*` 与旁路放行），防删除锁定 |
+| `admin` | `Admin123!` | `super_admin` | 全局完全支配权限（包含 `*:*:*` 旁路放行），防删除保护 |
 | `test_ops` | `Admin123!` | `admin` | 系统运维主管，拥有除超级权限外的全量业务管理与配置权限 |
-| `test_user` | `User123!` | `general_user` | 普通员工，仅具备基础菜单与列表查询权限（写操作受 403 严格拦截） |
+| `test_user` | `User123!` | `general_user` | 普通员工，仅具备基础菜单与列表查询权限（写操作受 403 拦截） |
 
 ### 核心安全机制
+
 - **双 Token 自动轮转**：短效 Access Token (15m) + 长效 Refresh Token (7d)，支持重放攻击拦截与即时吊销。
-- **动态权限即时失效**：依托 `User.tokenVersion` 机制，管理员调整用户权限/角色后毫秒级阻断旧凭据。
+- **动态权限即时失效**：依托 `User.tokenVersion` 机制，管理员调整权限或禁用账号后毫秒级阻断已签发凭据。
 - **Next.js 16 Proxy**：采用 Next.js 16 规范的 `proxy.ts` 流量代理边界进行前端路由拦截与安全控制。
-- **全链路审计追踪**：集成 `LoginLog` 登录流水与 `OperationLog` 细粒度操作审计（含入参敏感信息脱敏）。
+- **全链路审计追踪**：集成 `LoginLog` 登录流水与 `OperationLog` 细粒度操作审计（包含入参敏感信息自动脱敏）。
+
+---
+
+## 🐳 Docker 容器化编排
+
+项目所有容器配置文件集中存放在 [`infra/compose`](file:///d:/ZSP/Study/Ai%20Agent/agentic-fullstack-monorepo/infra/compose) 目录下。
+
+### 生产容器编排启动
+
+```bash
+docker compose -f infra/compose/compose.yaml up --build
+```
+
+### 本地开发热更新模式
+
+通过挂载宿主机源码卷到容器内，支持代码修改后实时重载：
+
+```bash
+docker compose -f infra/compose/compose.dev.yaml up
+```
 
