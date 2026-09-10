@@ -6,7 +6,7 @@ import {
   analysisPrompt,
   riskPrompt,
   summaryPrompt,
-} from '../prompts/requirement.prompts.js';
+} from '../prompts/orchestrator.prompts.js';
 import {
   createSubAgents,
   extractAgent,
@@ -26,7 +26,7 @@ describe('Multi-Agent Fixed Workflow Orchestration', () => {
   const TEST_REQUIREMENT_INPUT =
     '开发一个面向需求分析师的会话记忆系统，支持多轮澄清并自动裁剪长对话上下文';
 
-  describe('1. 需求分析 Agent 提示词定义 (requirement.prompts.ts)', () => {
+  describe('1. 需求分析 Agent 提示词定义 (orchestrator.prompts.ts)', () => {
     it('应成功导出 5 个 ChatPromptTemplate 提示词实例', () => {
       expect(extractPrompt).toBeDefined();
       expect(clarifyPrompt).toBeDefined();

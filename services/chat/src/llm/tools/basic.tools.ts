@@ -1,3 +1,10 @@
+/**
+ * basic.tools.ts
+ *
+ * 【Chapter 03 基础演示工具集】
+ * 提供轻量级的约束有效性检查与实体字典查询，专供 /api/llm/tool-bind 演示接口使用。
+ * 生产/进阶沙箱文件系统业务工具请参阅 tools/business.tools.ts。
+ */
 import { tool } from '@langchain/core/tools';
 import type { StructuredToolInterface } from '@langchain/core/tools';
 import { z } from '@autix/contracts';

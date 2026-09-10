@@ -1,11 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { ChatPromptTemplate } from '@langchain/core/prompts';
 import type { ChatOpenAI } from '@langchain/openai';
-import {
-  REQUIREMENT_SYSTEM_PROMPT,
-  REQUIREMENT_USER_TEMPLATE,
-} from './prompts/requirement.prompt.js';
 import { createChatModel } from './model.factory.js';
+import { createRequirementPromptTemplate } from './requirement.prompt-builder.js';
 import {
   RequirementResultSchema,
   type RequirementResult,
@@ -14,13 +10,9 @@ import {
 @Injectable()
 export class RequirementService {
   /**
-   * 复用 prompts/requirement.prompt.js 中的常量
-   * 用 ChatPromptTemplate.fromMessages() 构建提示模板
+   * 需求抽取提示词模板（统一复用 requirement.prompt-builder 构建器）
    */
-  readonly prompt = ChatPromptTemplate.fromMessages([
-    ['system', REQUIREMENT_SYSTEM_PROMPT],
-    ['human', REQUIREMENT_USER_TEMPLATE],
-  ]);
+  readonly prompt = createRequirementPromptTemplate();
 
   /**
    * 需求结构化抽取方法

@@ -8,10 +8,10 @@ import {
   analysisPrompt,
   riskPrompt,
   summaryPrompt,
-} from '../prompts/requirement.prompts.js';
+} from '../prompts/orchestrator.prompts.js';
 
 /**
- * 需求抽取结果数据结构（对齐 requirement.prompts.ts）
+ * 需求抽取结果数据结构（对齐 orchestrator.prompts.ts）
  */
 export interface ExtractedRequirement {
   requirementType?: string;
