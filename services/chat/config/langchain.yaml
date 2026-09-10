@@ -8,7 +8,7 @@ llm:
   # 单次最大生成 token 数
   maxTokens: 2048
   # 请求超时（毫秒）
-  timeoutMs: 30000
+  timeoutMs: 90000
 
 retrieval:
   # 向量检索返回的最大文档数
