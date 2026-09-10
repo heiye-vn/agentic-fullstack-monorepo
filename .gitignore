@@ -13,3 +13,6 @@ Thumbs.db
 .vscode/
 .idea/
 .workbuddy/
+
+# 自动生成的代码（Prisma Client 等）
+**/src/generated/

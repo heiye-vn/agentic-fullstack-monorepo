@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { PrismaClient, PermissionType } from '@prisma/client';
+import { PermissionType } from '@prisma/client';
+import { PrismaService } from '../src/prisma/prisma.service.js';
 import * as argon2 from 'argon2';
 
 describe('Seed Database RBAC Data', () => {
   it('should successfully seed initial departments, roles, permissions and users', async () => {
-    const prisma = new PrismaClient();
+    const prisma = new PrismaService();
     await prisma.$connect();
 
     // 1. 初始化部门 (唯一键是 code)

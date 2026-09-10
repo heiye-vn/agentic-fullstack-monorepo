@@ -1,7 +1,14 @@
-import { PrismaClient, PermissionType, CommonStatus } from "@prisma/client";
+import { PermissionType, CommonStatus } from "@prisma/client";
+import { PrismaClient } from "../src/generated/prisma/client.js";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
 import * as argon2 from "argon2";
 
-const prisma = new PrismaClient();
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL || "postgresql://postgres:postgres123@localhost:5432/autix_rbac?schema=public",
+});
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
   console.log("🌱 正在开始 RBAC 数据初始化 (Seed)...");
