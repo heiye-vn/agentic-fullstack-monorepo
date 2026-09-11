@@ -12,6 +12,8 @@ import { trimMessages, type BaseMessage } from '@langchain/core/messages';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 import { ChatOpenAI } from '@langchain/openai';
 import { createChatModel } from '../model.factory.js';
+import { DbChatMessageHistory } from '../../message/db-chat-history.js';
+import type { MessageService } from '../../message/message.service.js';
 import {
   REQUIREMENT_ASSISTANT_SYSTEM_PROMPT,
   REQUIREMENT_ASSISTANT_USER_TEMPLATE,
@@ -163,6 +165,32 @@ export class RunnableMemoryService {
       runnable,
       getMessageHistory: (sessionId: string) =>
         this.getOrCreateHistory(sessionId, version),
+      inputMessagesKey: 'input',
+      historyMessagesKey: 'history',
+    });
+  }
+
+  /**
+   * 构建基于 PostgreSQL 持久化历史记录的 RunnableWithMessageHistory 实例
+   *
+   * @param messageService 消息持久化服务
+   * @param version 记忆版本（standard 或 trimmed）
+   * @param customModel 可选覆盖模型
+   */
+  createRunnableWithDbHistory(
+    messageService: MessageService,
+    version: MemoryVersion = 'standard',
+    customModel?: ChatOpenAI,
+  ): RunnableWithMessageHistory<Record<string, unknown>, string> {
+    const runnable =
+      version === 'trimmed'
+        ? this.createTrimmedChain(customModel)
+        : this.createStandardChain(customModel);
+
+    return new RunnableWithMessageHistory({
+      runnable,
+      getMessageHistory: (sessionId: string) =>
+        new DbChatMessageHistory(sessionId, messageService),
       inputMessagesKey: 'input',
       historyMessagesKey: 'history',
     });
