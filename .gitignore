@@ -16,3 +16,7 @@ Thumbs.db
 
 # 自动生成的代码（Prisma Client 等）
 **/src/generated/
+
+# 上传目录
+uploads/
+**/uploads/

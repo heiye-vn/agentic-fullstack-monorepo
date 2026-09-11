@@ -11,7 +11,8 @@
     "forceConsistentCasingInFileNames": true,
     "baseUrl": ".",
     "paths": {
-      "@autix/contracts": ["packages/contracts/src/index.ts"]
+      "@autix/contracts": ["packages/contracts/src/index.ts"],
+      "@autix/types": ["packages/types/src/index.ts"]
     }
   }
 }

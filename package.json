@@ -12,7 +12,7 @@
     "dev:rbac": "turbo run dev --filter=@autix/user-system --filter=@autix/admin-web",
     "build": "turbo build",
     "typecheck": "turbo typecheck",
-    "postinstall": "pnpm --filter @autix/user-system prisma:generate"
+    "postinstall": "pnpm --filter @autix/user-system prisma:generate && pnpm --filter @autix/chat db:generate"
   },
   "devDependencies": {
     "@types/node": "^22.13.5",
