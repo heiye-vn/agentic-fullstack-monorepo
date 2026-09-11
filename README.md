@@ -8,9 +8,11 @@
 
 本项目用于 **AI Agent（人工智能体）全栈落地开发实践与技术探索**，采用分阶段渐进式演进路线：
 
-- **Chapter 01: 全栈工程化底座**：搭建基于 pnpm + Turborepo 的多包工作区，实现类型契约跨端共享、独立 Dockerfile 打包与本地容器热更新。
-- **Chapter 02: 企业级 RBAC 权限管控系统**：基于 PostgreSQL + Prisma 落地双 Token 轮转鉴权、细粒度权限守卫、用户与组织树管理、操作审计及 Next.js 16 Proxy 管理中台。
-- **Chapter 03: 基于 LangChain 的需求分析提取平台**：构建基于 LangChain Expression Language (LCEL) 的提示词管道、流式 SSE 响应、Zod 结构化抽取、自动工具循环（Tool Loop），并提供 Linear 曜石黑风格的交互工作界面。
+- **Chapter 01: 全栈工程化底座** (`chapter-01-monorepo-setup`)：搭建基于 pnpm + Turborepo 的多包工作区，实现类型契约跨端共享、独立 Dockerfile 打包与本地容器热更新。
+- **Chapter 02: 企业级 RBAC 权限管控系统** (`chapter-02-user-system`)：基于 PostgreSQL + Prisma 落地双 Token 轮转鉴权、细粒度权限守卫、用户与组织树管理、操作审计及 Next.js 16 Proxy 管理中台。
+- **Chapter 03: 基于 LangChain 的需求分析提取平台** (`chapter-03-first-chain`)：构建基于 LangChain Expression Language (LCEL) 的提示词管道、流式 SSE 响应、Zod 结构化抽取、自动工具循环（Tool Loop），并提供 Linear 曜石黑风格的交互工作界面。
+- **Chapter 04: 智能体记忆与多 Agent 协同编排** (`chapter-04-agent-memory-tools`)：引入 Runnable 会话记忆、安全文件沙箱工具链，构建主编排器与领域子智能体协同工作流，实现复杂需求自动化拆解与分析。
+- **Chapter 05: 数据库持久化、RAG 向量检索与任务流通知** (`chapter-05-db-vector`)：Chat 服务集成 Prisma ORM 持久化会话与历史消息，实现多格式文档解析、智能切块、向量相似度检索（RAG），以及基于 SSE 的异步长任务事件流推送。
 
 ---
 
@@ -126,6 +128,58 @@ pnpm run build
 # 全工作区执行 TypeScript 静态类型检查
 pnpm run typecheck
 ```
+
+---
+
+## 📡 Chapter 05: 数据库持久化、RAG 向量检索与任务流通知
+
+> **对应分支**：`chapter-05-db-vector`
+
+在第五阶段，Chat 服务完成了生产级工程化演进，接入持久化数据库、RAG 文档知识库与长任务实时通知：
+
+### 1. 核心特性
+
+- **数据持久化与会话管理（Prisma ORM）**：
+  - 为 Chat 服务接入独立 PostgreSQL / Prisma 7，实现会话（Conversation）与消息（Message）的完整持久化读写（`DbChatHistory`），替代纯内存存储。
+- **文档知识库与 RAG 向量检索（Document & Vector Store）**：
+  - **多格式文档解析**：支持 PDF、Word (`.docx`) 及纯文本解析，统一提取正文。
+  - **智能切块与嵌入**：基于 Recursive 分块策略与 Transformers / OpenAI 向量嵌入（Embedding）。
+  - **相似度检索**：实现基于余弦相似度的向量检索接口，为 Agent 提供精准上下文召回。
+- **异步长任务与 SSE 实时事件通知（Task SSE Notification）**：
+  - 建立基于 Server-Sent Events (SSE) 的事件通道，实时向前端推送文档切块、向量化进度及异步任务执行状态。
+- **通用规范模块健全**：
+  - 补齐全局异常过滤器（`AllExceptionsFilter`）、标准化响应拦截器（`ResponseInterceptor`）与 JWT 鉴权守卫。
+
+### 2. 常用操作指令
+
+```bash
+# 启动本地 PostgreSQL 容器
+docker compose -f infra/compose/compose.dev.yaml up -d postgres
+
+# 同步 Chat 服务数据库表结构
+pnpm --filter @autix/chat db:push
+
+# 打开 Prisma 数据库管理面板 (默认端口 51212)
+pnpm --filter @autix/chat db:studio
+```
+
+---
+
+## 🧠 Chapter 04: 智能体记忆与多 Agent 协同编排
+
+> **对应分支**：`chapter-04-agent-memory-tools`
+
+在第四阶段，系统由单链调用进阶至自主智能体（Agent）体系，实现了会话记忆与多智能体分工协同：
+
+### 1. 核心特性
+
+- **可运行会话记忆（Runnable Memory）**：
+  - 基于 LangChain `RunnableWithMessageHistory` 统一维护多轮对话状态，支持上下文自动追踪与记忆管理。
+- **安全沙箱工具链（Business & Filesystem Tools）**：
+  - **业务计算工具**：封装指标计算、格式化清洗等规范 LangChain Tools。
+  - **安全文件系统工具**：提供受限沙箱文件读写能力，支持 Agent 自主读取标准规约并落盘需求规格报告（Markdown / JSON）。
+- **多智能体协同编排器（Multi-Agent Orchestrator）**：
+  - 构建主调度器（Orchestrator）与领域子 Agent（分析师、安全合规、架构设计等）的协作工作流，实现复杂需求任务的自动化拆分与汇总交付。
 
 ---
 
