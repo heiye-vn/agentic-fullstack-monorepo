@@ -1,0 +1,103 @@
+generator client {
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [vector]
+}
+
+// 消息角色枚举
+enum MessageRole {
+  USER
+  ASSISTANT
+}
+
+// 任务状态枚举
+enum TaskStatus {
+  pending
+  processing
+  done
+  error
+}
+
+// 1. 会话表
+model Conversation {
+  id        String    @id @default(cuid())
+  userId    String    // 关联用户系统 User ID (不建外键约束)
+  title     String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  messages  Message[]
+
+  @@index([userId])
+  @@map("conversations")
+}
+
+// 2. 消息表
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  role           MessageRole
+  content        String       @db.Text
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@map("messages")
+}
+
+// 3. 文档表
+model Document {
+  id          String          @id @default(cuid())
+  userId      String          // 关联用户系统 User ID (不建外键约束)
+  filename    String
+  mimeType    String
+  size        Int
+  filePath    String?
+  storageType String          @default("local")
+  status      String          @default("pending")
+  chunkCount  Int             @default(0)
+  createdAt   DateTime        @default(now())
+
+  chunks      DocumentChunk[]
+
+  @@index([userId])
+  @@map("documents")
+}
+
+// 4. 文档切片与向量表
+model DocumentChunk {
+  id         String                 @id @default(cuid())
+  documentId String
+  content    String                 @db.Text
+  chunkIndex Int
+  embedding  Unsupported("vector")?
+
+  document   Document               @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@map("document_chunks")
+}
+
+// 5. 任务事件表
+model TaskEvent {
+  id        String     @id @default(cuid())
+  userId    String     // 关联用户系统 User ID (不建外键约束)
+  taskType  String
+  taskId    String
+  status    TaskStatus @default(pending)
+  message   String?    @db.Text
+  metadata  Json?
+  createdAt DateTime   @default(now())
+  readAt    DateTime?
+
+  @@index([userId])
+  @@index([taskId])
+  @@map("task_events")
+}
