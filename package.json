@@ -14,6 +14,11 @@
     "typecheck": "turbo typecheck",
     "postinstall": "pnpm --filter @autix/user-system prisma:generate && pnpm --filter @autix/chat db:generate"
   },
+  "pnpm": {
+    "overrides": {
+      "sharp": "^0.33.5"
+    }
+  },
   "devDependencies": {
     "@types/node": "^22.13.5",
     "turbo": "^2.4.4",
