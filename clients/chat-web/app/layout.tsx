@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI 需求结构化抽取平台 - Autix Chat Web",
-  description: "基于 NestJS 服务端与 LangChain 结构化输出，精准提取业务需求的核心动作、约束条件与名词实体",
+  title: "Autix AI - 智能需求分析工作台",
+  description: "基于 NestJS 服务端与 LangChain 协议式组件交互，驱动结构化需求分析、动态表单与自适应状态机",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
