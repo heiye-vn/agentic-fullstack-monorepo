@@ -131,6 +131,27 @@ pnpm run typecheck
 
 ---
 
+## 🎨 Chapter 06: AI 结构化 UI 响应协议与工作台 (AI UI Protocol & Workbench)
+
+> **对应分支**：`chapter-06-ai-ui`
+
+在第六阶段，系统突破了纯文本交互限制，实现了 **AI 结构化 UI 协议（UI Protocol）** 与 **沉浸式三栏智能工作台（Workbench）**，让大模型具备动态生成交互式组件与驱动业务闭环的能力：
+
+### 1. 核心特性
+
+- **Zod 驱动的结构化 UI 响应协议（UI Protocol）**：
+  - 基于判别联合（Discriminated Union）定义标准组件契约，覆盖 `text`、`selection`、`form`、`confirmation`、`card`、`steps`、`table`、`action_buttons` 8 种原子交互组件。
+  - 结合 LangChain `withStructuredOutput` 强类型约束生成与意图规则守护，使 AI 响应直接流转为前端可交互界面。
+- **确定性交互状态机（UIFlowService）**：
+  - 后端提供状态机闭环：`select_type`（选择需求类型）→ `fill_detail`（表单填写）→ `confirm`（结果确认）→ `result`（全息成果与步骤推进），支持用户操作回传、数据暂存与状态回退。
+- **前端 AI UI 动态渲染引擎**：
+  - 位于 [`clients/chat-web/components/ai-ui`](./clients/chat-web/components/ai-ui)，封装高质感暗黑主题组件库与 `ComponentRenderer` 动态分发引擎。
+- **全功能沉浸式三栏工作台（Workbench）**：
+  - 首页全面重构成三栏工作台：集成左侧历史会话导航、中间智能交互主区（支持极简、分屏与专注模式）与右侧模型参数/知识库配置面板。
+  - 支持多路由独立体验：工作台主页（`/`）、需求提取平台（`/extract`）、UI 协议对话（`/ui-chat`）及组件画廊（`/ui-gallery`）。
+
+---
+
 ## 📡 Chapter 05: 数据库持久化、RAG 向量检索与任务流通知
 
 > **对应分支**：`chapter-05-db-vector`
