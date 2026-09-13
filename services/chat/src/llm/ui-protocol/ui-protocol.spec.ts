@@ -359,7 +359,7 @@ describe('UI 响应协议与 Structured Output 规范测试套件', () => {
 
       const res = await flowService.handleAction(sessionId, formSubmitAction);
 
-      expect(res.message).toContain('需求详情已暂存');
+      expect(res.message).toContain('需求分析已生成');
       const confirmComp = res.components.find(
         (c): c is ConfirmationComponent => c.type === 'confirmation',
       );
@@ -367,10 +367,10 @@ describe('UI 响应协议与 Structured Output 规范测试套件', () => {
 
       expect(confirmComp).toBeDefined();
       expect(confirmComp?.summary).toContain('电子发票即时开具与推送');
-      expect(confirmComp?.details?.['优先级']).toBe('P0');
+      expect(confirmComp?.details?.['业务优先级']).toBe('P0');
 
       expect(cardComp).toBeDefined();
-      expect(cardComp?.title).toBe('需求信息预览: 电子发票即时开具与推送');
+      expect(cardComp?.title).toBe('分析结果摘要');
       expect(res.context?.sessionStage).toBe('confirm');
     });
 
