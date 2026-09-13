@@ -5,6 +5,7 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { LlmModule } from './llm/llm.module.js';
 import { AdvancedModule } from './llm/advanced.module.js';
+import { UIProtocolModule } from './llm/ui-protocol/ui-protocol.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { MessageModule } from './message/message.module.js';
 import { ConversationModule } from './conversation/conversation.module.js';
@@ -26,6 +27,7 @@ import { SseModule } from './sse/sse.module.js';
     DocumentModule,
     LlmModule,
     AdvancedModule,
+    UIProtocolModule,
     SseModule,
   ],
   controllers: [AppController],
