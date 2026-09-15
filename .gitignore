@@ -20,3 +20,6 @@ Thumbs.db
 # 上传目录
 uploads/
 **/uploads/
+
+# 本地教程文档（多端开发阶段暂不忽略，后续完成后再行移除）
+# docs/tutorials/
