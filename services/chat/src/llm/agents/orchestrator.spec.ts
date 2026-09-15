@@ -16,10 +16,7 @@ import {
   summaryAgent,
   type SubAgents,
 } from './sub-agents.js';
-import {
-  OrchestratorService,
-  safeParseJson,
-} from './orchestrator.service.js';
+import { OrchestratorService, safeParseJson } from './orchestrator.service.js';
 import { AgentsController } from './agents.controller.js';
 
 describe('Multi-Agent Fixed Workflow Orchestration', () => {
@@ -139,7 +136,8 @@ describe('Multi-Agent Fixed Workflow Orchestration', () => {
     });
 
     it('应正确去除 Markdown 代码块并解析 JSON', () => {
-      const markdownJson = '```json\n{"needsClarification": false, "clarificationQuestions": []}\n```';
+      const markdownJson =
+        '```json\n{"needsClarification": false, "clarificationQuestions": []}\n```';
       const parsed = safeParseJson(markdownJson, null);
       expect(parsed).toEqual({
         needsClarification: false,
@@ -185,13 +183,22 @@ describe('Multi-Agent Fixed Workflow Orchestration', () => {
         reason: '需求核心功能与受众明确',
       });
 
-      const mockAnalysis = '### 需求分析报告\n- 功能拆解：会话管理、自动裁剪引擎';
-      const mockRisk = '### 风险评估\n- 风险：上下文裁剪导致信息丢失；对策：结合总结摘要压缩';
-      const mockSummary = '# 最终需求分析规格报告\n开发面向需求分析师的会话记忆系统...';
+      const mockAnalysis =
+        '### 需求分析报告\n- 功能拆解：会话管理、自动裁剪引擎';
+      const mockRisk =
+        '### 风险评估\n- 风险：上下文裁剪导致信息丢失；对策：结合总结摘要压缩';
+      const mockSummary =
+        '# 最终需求分析规格报告\n开发面向需求分析师的会话记忆系统...';
 
-      (mockSubAgents.extractAgent.invoke as any).mockResolvedValue(mockExtraction);
-      (mockSubAgents.clarifyAgent.invoke as any).mockResolvedValue(mockClarification);
-      (mockSubAgents.analysisAgent.invoke as any).mockResolvedValue(mockAnalysis);
+      (mockSubAgents.extractAgent.invoke as any).mockResolvedValue(
+        mockExtraction,
+      );
+      (mockSubAgents.clarifyAgent.invoke as any).mockResolvedValue(
+        mockClarification,
+      );
+      (mockSubAgents.analysisAgent.invoke as any).mockResolvedValue(
+        mockAnalysis,
+      );
       (mockSubAgents.riskAgent.invoke as any).mockResolvedValue(mockRisk);
       (mockSubAgents.summaryAgent.invoke as any).mockResolvedValue(mockSummary);
 
@@ -232,8 +239,12 @@ describe('Multi-Agent Fixed Workflow Orchestration', () => {
         reason: '缺少存储与裁剪策略细节',
       });
 
-      (mockSubAgents.extractAgent.invoke as any).mockResolvedValue(mockExtraction);
-      (mockSubAgents.clarifyAgent.invoke as any).mockResolvedValue(mockClarification);
+      (mockSubAgents.extractAgent.invoke as any).mockResolvedValue(
+        mockExtraction,
+      );
+      (mockSubAgents.clarifyAgent.invoke as any).mockResolvedValue(
+        mockClarification,
+      );
 
       const result = await service.orchestrate(TEST_REQUIREMENT_INPUT);
 
@@ -281,7 +292,13 @@ describe('Multi-Agent Fixed Workflow Orchestration', () => {
         mode: 'fixed_workflow',
         status: 'completed',
         clarificationQuestions: [],
-        usedAgents: ['extractAgent', 'clarifyAgent', 'analysisAgent', 'riskAgent', 'summaryAgent'],
+        usedAgents: [
+          'extractAgent',
+          'clarifyAgent',
+          'analysisAgent',
+          'riskAgent',
+          'summaryAgent',
+        ],
         fallback: null,
         steps: [],
         report: '# 需求分析报告',
