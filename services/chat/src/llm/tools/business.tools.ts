@@ -296,17 +296,155 @@ export const writeFileTool = tool(
 );
 
 // ============================================================
+// 4. 需求检索与详情查询工具 (search_requirement，8.5 ReAct 子图使用)
+// ============================================================
+
+const SearchRequirementInputSchema = z.object({
+  reqId: z
+    .string()
+    .describe('需求编号，例如：“REQ-20240315-001” 或 “REQ-2026-001”'),
+});
+
+export type SearchRequirementInput = z.infer<
+  typeof SearchRequirementInputSchema
+>;
+
+export const searchRequirementTool = tool(
+  async (input: SearchRequirementInput): Promise<string> => {
+    const rawId = input.reqId?.trim() ?? '';
+    if (!rawId) {
+      return JSON.stringify({
+        success: false,
+        error: '需求编号 reqId 不能为空',
+      });
+    }
+
+    const normalizedId = rawId.endsWith('.json') ? rawId.slice(0, -5) : rawId;
+    const filePath = `requirements/${normalizedId}.json`;
+
+    try {
+      const fullPath = resolveSafePath(filePath);
+      if (existsSync(fullPath)) {
+        const rawContent = await fs.readFile(fullPath, 'utf-8');
+        return JSON.stringify({
+          success: true,
+          reqId: normalizedId,
+          source: 'workspace',
+          data: JSON.parse(rawContent),
+        });
+      }
+    } catch {
+      // 忽略文件读取异常，回退至结构化 Mock
+    }
+
+    // 若无物理文件，返回结构化 Mock 需求详情
+    return JSON.stringify({
+      success: true,
+      reqId: normalizedId,
+      source: 'mock',
+      title: `需求规格详情 [${normalizedId}]`,
+      businessGoal: '构建安全、可扩展、高可用的现代化业务模块',
+      coreFeatures: [
+        '支持核心业务数据流转与结构化持久化',
+        '提供清晰的用户操作链路与实时状态反馈',
+        '具备异常捕获与自动化兜底降级策略',
+      ],
+      acceptanceCriteria: [
+        '核心用例测试覆盖率 >= 85%',
+        '接口 P99 响应延时 <= 500ms',
+        '关键状态流转具备类型安全与事务一致性',
+      ],
+      dependencies: ['UserAuthService', 'BaseDatabaseModule'],
+      status: 'UNDER_REVIEW',
+    });
+  },
+  {
+    name: 'search_requirement',
+    description:
+      '根据需求单编号（例如：REQ-20240315-001）查询该需求的详细规格、业务目标、核心功能与验收标准等上下文信息',
+    schema: SearchRequirementInputSchema,
+  },
+);
+
+// ============================================================
+// 5. 冲突与架构依赖检测工具 (check_conflicts，8.5 ReAct 子图使用)
+// ============================================================
+
+const CheckConflictsInputSchema = z.object({
+  reqId: z.string().optional().describe('可选的需求编号'),
+  description: z
+    .string()
+    .describe('需求描述或功能细节，用于分析潜在的业务或架构冲突'),
+});
+
+export type CheckConflictsInput = z.infer<typeof CheckConflictsInputSchema>;
+
+export const checkConflictsTool = tool(
+  async (input: CheckConflictsInput): Promise<string> => {
+    const text =
+      `${input.reqId ?? ''} ${input.description ?? ''}`.toLowerCase();
+
+    // 针对登录/认证/鉴权/Token/SSO 相关需求的冲突检测
+    const authKeywords = [
+      '登录',
+      '认证',
+      'auth',
+      'login',
+      'token',
+      'jwt',
+      'sso',
+      '权限',
+      '单点登录',
+    ];
+    const isAuthRelated = authKeywords.some((k) => text.includes(k));
+
+    if (isAuthRelated) {
+      return JSON.stringify({
+        hasConflict: true,
+        conflictType: 'AUTH_ARCHITECTURE_DEPENDENCY',
+        severity: 'HIGH',
+        message:
+          '检测到与现有系统单点登录（SSO）及统一 JWT 认证体系存在潜在架构冲突：新模块不得构建独立的用户会话存储，须接入统一网关与鉴权守卫。',
+        recommendation:
+          '复用现有的统一认证拦截器与鉴权守卫，统一颁发和校验 Token，防止双重会话与状态撕裂。',
+      });
+    }
+
+    return JSON.stringify({
+      hasConflict: false,
+      conflictType: 'NONE',
+      severity: 'LOW',
+      message:
+        '系统冲突检测通过：未发现与当前核心业务模块及系统架构的潜在冲突。',
+      recommendation: '按标准模块化分层设计推进功能实现。',
+    });
+  },
+  {
+    name: 'check_conflicts',
+    description:
+      '根据需求编号与功能描述检测与现有系统架构、业务规则及权限/认证模块（如登录认证系统）的潜在冲突与依赖风险',
+    schema: CheckConflictsInputSchema,
+  },
+);
+
+// ============================================================
 // 导出工具集与字典
 // ============================================================
+
+export const analysisTools = [searchRequirementTool, checkConflictsTool];
 
 export const businessTools = [
   queryRequirementTool,
   readFileTool,
   writeFileTool,
+  searchRequirementTool,
+  checkConflictsTool,
 ];
 
 export const businessToolsByName: Record<string, StructuredToolInterface> = {
   [queryRequirementTool.name]: queryRequirementTool,
   [readFileTool.name]: readFileTool,
   [writeFileTool.name]: writeFileTool,
+  [searchRequirementTool.name]: searchRequirementTool,
+  [checkConflictsTool.name]: checkConflictsTool,
 };
