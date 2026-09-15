@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { MessageRole, type Prisma } from '../prisma/index.js';
-import { HumanMessage, AIMessage, type BaseMessage } from '@langchain/core/messages';
+import {
+  HumanMessage,
+  AIMessage,
+  type BaseMessage,
+} from '@langchain/core/messages';
 
 @Injectable()
 export class MessageService {

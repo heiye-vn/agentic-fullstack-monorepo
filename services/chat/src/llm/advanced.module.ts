@@ -6,6 +6,7 @@ import {
   EmbeddingController,
   AgentsController,
 } from './advanced.controller.js';
+import { GraphController } from './graph/graph.controller.js';
 import { AdvancedAnalysisService } from './advanced-analysis.service.js';
 import { RunnableMemoryService } from './memory/runnable-memory.service.js';
 import { EmbeddingService } from './embedding/embedding.service.js';
@@ -20,6 +21,7 @@ import { OrchestratorService } from './agents/orchestrator.service.js';
     FilesystemController,
     EmbeddingController,
     AgentsController,
+    GraphController,
   ],
   providers: [
     RunnableMemoryService,
