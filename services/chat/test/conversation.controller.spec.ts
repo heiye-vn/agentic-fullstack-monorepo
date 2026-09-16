@@ -11,6 +11,8 @@ import { RunnableWithMessageHistory } from '@langchain/core/runnables';
 import { AppModule } from '../src/app.module.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { RunnableMemoryService } from '../src/llm/memory/runnable-memory.service.js';
+import { OrchestratorService } from '../src/llm/agents/orchestrator.service.js';
+import { SearchService } from '../src/document/search.service.js';
 import { ConversationService } from '../src/conversation/conversation.service.js';
 import { DbChatMessageHistory } from '../src/message/db-chat-history.js';
 import { MessageRole } from '../src/prisma/index.js';
@@ -20,7 +22,12 @@ describe('ConversationController E2E / API Tests', () => {
   let jwtService: JwtService;
   let prisma: PrismaService;
   let runnableMemoryService: RunnableMemoryService;
+  let orchestratorService: OrchestratorService;
+  let searchService: SearchService;
 
+  // 整个 spec 的底线：**绝不触发外部真实模型调用**。
+  // chat 接口的链路是「RAG 检索 → 编排管道 → 编排无产出时回退普通对话链」，
+  // 每个环节默认都会打真实的 embedding / LLM，所以必须逐层 mock。
   const jwtSecret =
     process.env.JWT_SECRET || 'autix_rbac_jwt_secret_key_2026_super_secure';
 
@@ -42,6 +49,19 @@ describe('ConversationController E2E / API Tests', () => {
     jwtService = app.get(JwtService);
     prisma = app.get(PrismaService);
     runnableMemoryService = app.get(RunnableMemoryService);
+    orchestratorService = app.get(OrchestratorService);
+    searchService = app.get(SearchService);
+
+    // RAG 检索：跳过本地 embedding 模型预热与 pgvector 查询，走「无命中」分支
+    vi.spyOn(searchService, 'similaritySearch').mockResolvedValue([]);
+
+    // 编排管道：产出零事件，让 ChatStreamService 判定「管道无内容」从而走下面的兜底链。
+    // 这样既覆盖了 SSE 帧协议与消息落库，又不会真的去跑多 Agent 多轮 LLM。
+    vi.spyOn(orchestratorService, 'streamOrchestrate').mockImplementation(
+      async function* () {
+        /* intentionally emits nothing */
+      },
+    );
 
     // Mock createRunnableWithDbHistory 与 createStandardChain 避免调用外部真实 OpenAI API
     vi.spyOn(runnableMemoryService, 'createStandardChain').mockImplementation(() => {

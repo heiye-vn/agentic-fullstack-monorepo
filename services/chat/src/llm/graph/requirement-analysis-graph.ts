@@ -483,6 +483,74 @@ export async function triageNode(
 }
 
 /**
+ * 提取 triage 直答内容并转成 token 事件
+ *
+ * 背景见 `routeByIntent` 的 9.4 Handoff 优化：triage 识别出 chat/query 意图时会
+ * 直接把答复写进状态（chatResponse / queryResponse），图随即短路到 END。
+ * 这类答复无法流式（结构化输出），所以在这里按「一整段」补发一次 token 事件，
+ * 让上层 SSE 管道有内容可推，避免调用方触发重复生成的兜底逻辑。
+ */
+function* emitDirectReplyTokens(
+  nodeName: string,
+  output: unknown,
+): Generator<
+  { type: 'token'; node: string; step: string; content: string },
+  void,
+  unknown
+> {
+  if (nodeName !== 'triage' && nodeName !== 'classifier') return;
+  if (!output || typeof output !== 'object') return;
+
+  const patch = output as Record<string, unknown>;
+  const direct = patch.chatResponse ?? patch.queryResponse;
+
+  if (typeof direct === 'string' && direct.trim()) {
+    yield { type: 'token', node: nodeName, step: nodeName, content: direct };
+  }
+}
+
+/**
+ * 把模型的流式输出攒成完整字符串
+ *
+ * 为什么闲聊/查询节点要走 stream 而不是 invoke：
+ * LangGraph 的 `streamEvents(v2)` 只在节点内部真正发起流式 LLM 调用时才会产生
+ * `on_chat_model_stream` 事件。用 `invoke()` 的话上层一个 token 都收不到，
+ * 结果是 SSE 管道里没有 markdown 帧，只能由调用方再跑一遍兜底链 —— 白白多一次
+ * 模型调用，用户还要多等一轮。这里改成 stream 后 token 就能正常透传到前端。
+ */
+async function collectModelStream(
+  model: BaseChatModel,
+  messages: BaseMessage[],
+): Promise<string> {
+  let content = '';
+
+  try {
+    for await (const chunk of await model.stream(messages)) {
+      const piece =
+        typeof chunk?.content === 'string'
+          ? chunk.content
+          : Array.isArray(chunk?.content)
+            ? chunk.content
+                .map((c: unknown) =>
+                  typeof c === 'string' ? c : (c as { text?: string })?.text ?? '',
+                )
+                .join('')
+            : '';
+      content += piece;
+    }
+  } catch {
+    // 流式失败不应让整个图崩掉，降级为一次性调用拿回完整结果
+    const response = await model.invoke(messages);
+    content =
+      typeof response?.content === 'string'
+        ? response.content
+        : JSON.stringify(response?.content ?? '');
+  }
+
+  return content;
+}
+
+/**
  * 需求查询处理节点 (queryHandler)
  */
 export async function queryHandlerNode(
@@ -491,17 +559,14 @@ export async function queryHandlerNode(
 ): Promise<Partial<RequirementAnalysisStateType>> {
   const input = extractInputText(state);
   const model =
-    options?.model ?? createChatModel({ temperature: 0, streaming: false });
+    options?.model ?? createChatModel({ temperature: 0, streaming: true });
 
-  const response = await model.invoke([
+  const response = await collectModelStream(model, [
     new SystemMessage('你是需求查询助手'),
     new HumanMessage(input),
   ]);
 
-  const content =
-    typeof response.content === 'string'
-      ? response.content
-      : JSON.stringify(response.content);
+  const content = typeof response === 'string' ? response : String(response ?? '');
 
   return {
     queryResponse: content,
@@ -519,17 +584,14 @@ export async function chatHandlerNode(
 ): Promise<Partial<RequirementAnalysisStateType>> {
   const input = extractInputText(state);
   const model =
-    options?.model ?? createChatModel({ temperature: 0.7, streaming: false });
+    options?.model ?? createChatModel({ temperature: 0.7, streaming: true });
 
-  const response = await model.invoke([
+  const response = await collectModelStream(model, [
     new SystemMessage('你是友好的AI助手'),
     new HumanMessage(input),
   ]);
 
-  const content =
-    typeof response.content === 'string'
-      ? response.content
-      : JSON.stringify(response.content);
+  const content = typeof response === 'string' ? response : String(response ?? '');
 
   return {
     chatResponse: content,
@@ -1527,6 +1589,13 @@ export async function* streamAnalysisGraph(
       'chatHandler',
     ]);
 
+    // Critic-Refine 汇总子图的内部节点：actor 出草稿、critic 出 JSON 判定、refine 出终稿。
+    // 它们不在 recognizedNodes 里（加进去会多占一格 progress），但 token 归属又依赖
+    // currentNode，不单独跟踪的话 critic 的半截 JSON 会因为外层 summaryStep 不在
+    // jsonNodes 里而直接漏到用户聊天界面上。
+    const summaryInnerNodes = new Set(['actor', 'critic', 'refine']);
+    const summaryJsonNodes = new Set(['critic']);
+
     // 优先尝试采用 LangGraph v2 streamEvents 细粒度事件流
     if (typeof (graph as any).streamEvents === 'function') {
       let currentNode = '';
@@ -1540,18 +1609,27 @@ export async function* streamAnalysisGraph(
           event.metadata?.langgraph_node ||
           (recognizedNodes.has(event.name) ? event.name : undefined);
 
-        if (eventType === 'on_chain_start' && nodeName && recognizedNodes.has(nodeName)) {
-          if (nodeName !== currentNode) {
+        if (eventType === 'on_chain_start' && nodeName) {
+          if (summaryInnerNodes.has(nodeName)) {
+            // 只切换 token 归属上下文，不产生额外的节点生命周期事件
             currentNode = nodeName;
-            yield {
-              type: 'node_start',
-              node: nodeName,
-              step: nodeName,
-            };
+          } else if (recognizedNodes.has(nodeName)) {
+            if (nodeName !== currentNode) {
+              currentNode = nodeName;
+              yield {
+                type: 'node_start',
+                node: nodeName,
+                step: nodeName,
+              };
+            }
           }
         } else if (eventType === 'on_chat_model_stream') {
           // Token 事件：只转发非 JSON 阶段（如专家分析、综合报告）的流式 token
-          if (currentNode && !jsonNodes.has(currentNode)) {
+          if (
+            currentNode &&
+            !jsonNodes.has(currentNode) &&
+            !summaryJsonNodes.has(currentNode)
+          ) {
             const chunk = event.data?.chunk;
             const content =
               typeof chunk?.content === 'string'
@@ -1587,6 +1665,12 @@ export async function* streamAnalysisGraph(
               patch: output,
             };
           }
+
+          // 9.4 Handoff 直答：triage 用 withStructuredOutput 一次性产出答案，
+          // 天生没有流式 token，且 routeByIntent 会据此短路到 END（不经过 chatHandler）。
+          // 若不在这里把结果转成 token 事件，上层管道一个字都收不到，
+          // 只能再跑一遍兜底链 —— 同一条回答白白调两次模型。
+          yield* emitDirectReplyTokens(nodeName, output);
         }
       }
     } else {
@@ -1608,6 +1692,7 @@ export async function* streamAnalysisGraph(
             step: nodeName,
             patch: patch as Record<string, any>,
           };
+          yield* emitDirectReplyTokens(nodeName, patch);
         }
       }
     }
