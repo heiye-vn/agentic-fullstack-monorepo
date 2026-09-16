@@ -1,6 +1,6 @@
 import { IsOptional, IsString, IsEnum, IsInt, Min } from 'class-validator';
 import { Type } from 'class-transformer';
-import { CommonStatus } from '@prisma/client';
+import { CommonStatus } from '../../../generated/prisma/client.js';
 
 export class QueryUserDto {
   @IsOptional()

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { AuditService } from '../src/modules/audit/audit.service.js';
-import { AuditStatus } from '@prisma/client';
+import { AuditStatus } from '../src/generated/prisma/client.js';
 
 describe('Audit Module Integration Test', () => {
   let prisma: PrismaService;

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { RolesService } from '../src/modules/roles/roles.service.js';
 import { ConflictException, BadRequestException, NotFoundException } from '@nestjs/common';
-import { PermissionType } from '@prisma/client';
+import { PermissionType } from '../src/generated/prisma/client.js';
 
 describe('Roles Module Integration Test', () => {
   let prisma: PrismaService;

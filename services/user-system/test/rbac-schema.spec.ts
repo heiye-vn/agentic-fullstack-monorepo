@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PrismaService } from '../src/prisma/prisma.service.js';
-import { CommonStatus, PermissionType, AuditStatus } from '@prisma/client';
+import { CommonStatus, PermissionType, AuditStatus } from '../src/generated/prisma/client.js';
 
 describe('RBAC Database Schema Integration Test', () => {
   let prisma: PrismaService;

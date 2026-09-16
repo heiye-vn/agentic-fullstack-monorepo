@@ -20,7 +20,7 @@ import { QueryUserDto } from './dto/query-user.dto.js';
 import { AssignRolesDto } from './dto/assign-roles.dto.js';
 import { ResetPasswordDto } from './dto/reset-password.dto.js';
 import { JwtAuthGuard, PermissionsGuard, RequirePermissions } from '../../common/index.js';
-import { CommonStatus } from '@prisma/client';
+import { CommonStatus } from '../../generated/prisma/client.js';
 
 @Controller('api/v1/users')
 @UseGuards(JwtAuthGuard, PermissionsGuard)

@@ -9,7 +9,7 @@ import { CreateUserDto } from './dto/create-user.dto.js';
 import { UpdateUserDto } from './dto/update-user.dto.js';
 import { QueryUserDto } from './dto/query-user.dto.js';
 import { AssignRolesDto } from './dto/assign-roles.dto.js';
-import { CommonStatus, Prisma } from '@prisma/client';
+import { CommonStatus, Prisma } from '../../generated/prisma/client.js';
 import * as argon2 from 'argon2';
 
 @Injectable()

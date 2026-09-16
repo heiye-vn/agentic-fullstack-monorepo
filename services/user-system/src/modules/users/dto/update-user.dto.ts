@@ -1,5 +1,5 @@
 import { IsOptional, IsString, IsEmail, IsEnum } from 'class-validator';
-import { CommonStatus } from '@prisma/client';
+import { CommonStatus } from '../../../generated/prisma/client.js';
 
 export class UpdateUserDto {
   @IsOptional()

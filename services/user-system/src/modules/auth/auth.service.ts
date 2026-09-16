@@ -15,7 +15,7 @@ import { UpdateProfileDto } from './dto/update-profile.dto.js';
 import { ChangePasswordDto } from './dto/change-password.dto.js';
 import * as argon2 from 'argon2';
 import * as crypto from 'node:crypto';
-import { AuditStatus, CommonStatus } from '@prisma/client';
+import { AuditStatus, CommonStatus } from '../../generated/prisma/client.js';
 import { getJwtSecret, parseExpiresInSeconds } from '../../common/jwt-secret.js';
 
 @Injectable()

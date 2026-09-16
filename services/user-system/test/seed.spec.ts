@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PermissionType } from '@prisma/client';
+import { PermissionType } from '../src/generated/prisma/client.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import * as argon2 from 'argon2';
 

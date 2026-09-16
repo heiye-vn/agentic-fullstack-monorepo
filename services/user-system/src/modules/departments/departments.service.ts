@@ -7,7 +7,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { CreateDepartmentDto } from './dto/create-department.dto.js';
 import { UpdateDepartmentDto } from './dto/update-department.dto.js';
-import { CommonStatus } from '@prisma/client';
+import { CommonStatus } from '../../generated/prisma/client.js';
 
 export interface DepartmentTreeNode {
   id: string;

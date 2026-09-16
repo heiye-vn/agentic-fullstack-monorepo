@@ -1,5 +1,5 @@
 import { IsNotEmpty, IsString, MinLength, IsOptional, IsEmail, IsEnum, IsArray } from 'class-validator';
-import { CommonStatus } from '@prisma/client';
+import { CommonStatus } from '../../../generated/prisma/client.js';
 
 export class CreateUserDto {
   @IsString()

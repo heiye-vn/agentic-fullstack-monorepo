@@ -8,7 +8,7 @@ import {
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { AuditStatus } from '@prisma/client';
+import { AuditStatus } from '../../generated/prisma/client.js';
 
 @Injectable()
 export class AuditLogInterceptor implements NestInterceptor {

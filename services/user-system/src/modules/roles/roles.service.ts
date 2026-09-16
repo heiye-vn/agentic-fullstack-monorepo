@@ -9,7 +9,7 @@ import { CreateRoleDto } from './dto/create-role.dto.js';
 import { UpdateRoleDto } from './dto/update-role.dto.js';
 import { QueryRoleDto } from './dto/query-role.dto.js';
 import { AssignPermissionsDto } from './dto/assign-permissions.dto.js';
-import { CommonStatus, Prisma } from '@prisma/client';
+import { CommonStatus, Prisma } from '../../generated/prisma/client.js';
 
 @Injectable()
 export class RolesService {

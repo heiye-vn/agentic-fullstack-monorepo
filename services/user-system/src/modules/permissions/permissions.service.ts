@@ -7,7 +7,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { CreatePermissionDto } from './dto/create-permission.dto.js';
 import { UpdatePermissionDto } from './dto/update-permission.dto.js';
-import { CommonStatus, PermissionType } from '@prisma/client';
+import { CommonStatus, PermissionType } from '../../generated/prisma/client.js';
 
 export interface PermissionTreeNode {
   id: string;

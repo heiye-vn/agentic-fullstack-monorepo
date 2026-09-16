@@ -1,5 +1,5 @@
 import { IsNotEmpty, IsString, IsOptional, IsEnum, IsInt } from 'class-validator';
-import { CommonStatus, PermissionType } from '@prisma/client';
+import { CommonStatus, PermissionType } from '../../../generated/prisma/client.js';
 
 export class CreatePermissionDto {
   @IsString()
