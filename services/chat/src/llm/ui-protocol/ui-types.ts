@@ -160,10 +160,14 @@ export interface CardComponent {
 export interface StepItem {
   /** 步骤名称（例如：需求录入、智能抽取、架构评审、排期归档） */
   title: string;
+  /** 步骤标识键名（如 functional_expert） */
+  label?: string;
   /** 步骤描述 */
   description?: string;
   /** 步骤状态 */
-  status?: 'wait' | 'process' | 'finish' | 'error';
+  status?: 'wait' | 'process' | 'finish' | 'error' | 'completed' | 'running';
+  /** 是否为并行专家分支节点 (9.6.3) */
+  parallel?: boolean;
 }
 
 /**
@@ -269,6 +273,8 @@ export interface ProgressComponent {
   status?: 'processing' | 'success' | 'error';
   /** 动作标识 Key */
   actionKey?: string;
+  /** 是否为子图并行任务进度标记 (9.6.3) */
+  parallel?: boolean;
 }
 
 export type ProgressResponse = ProgressComponent;

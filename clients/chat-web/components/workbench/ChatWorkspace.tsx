@@ -4,11 +4,22 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import type { ModelConfig } from "./types";
 import type {
   AIUIResponse,
+  StepItem,
   UIAction,
   UIComponent,
   UIResponseContext,
 } from "@/types/ui-protocol";
 import { ComponentRenderer } from "../ai-ui/ComponentRenderer";
+import {
+  ThinkingIndicator,
+  type ProgressInfo,
+} from "../ai-ui/ThinkingIndicator";
+import { streamGraphAnalysis } from "@/lib/stream-client";
+import {
+  getStoredSessionMessages,
+  saveStoredSessionMessages,
+} from "./storage";
+
 
 interface ChatMessage {
   id: string;
@@ -58,63 +69,175 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   onSelectModel,
   onUpdateSessionTitle,
 }) => {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // 使用惰性初始化器同步读取本地历史消息，避免在 useEffect 中同步 setState 引发级联渲染
+  const [messages, setMessages] = useState<ChatMessage[]>(() =>
+    getStoredSessionMessages<ChatMessage>(sessionId)
+  );
+
+  // 防御性设计：若外部没有通过 key 重挂载且 sessionId 发生变更，在 render 阶段直接同步状态
+  const [prevSessionId, setPrevSessionId] = useState(sessionId);
+  if (sessionId !== prevSessionId) {
+    setPrevSessionId(sessionId);
+    setMessages(getStoredSessionMessages<ChatMessage>(sessionId));
+  }
+
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [deepSearchEnabled, setDeepSearchEnabled] = useState(false);
+  const [deepSearchEnabled, setDeepSearchEnabled] = useState(true);
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [context, setContext] = useState<UIResponseContext | undefined>(undefined);
+
+  // 9.6.3 前端流式多智能体与并行专家集群状态
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [currentProgress, setCurrentProgress] = useState<ProgressInfo | null>(null);
+  const [parallelAgents, setParallelAgents] = useState<Record<string, ProgressInfo>>({});
+  const [streamingText, setStreamingText] = useState("");
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const apiBaseUrl =
     process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4001";
 
-  // 当会话 ID 变更时，加载该会话的本地消息记录
+  // 组件卸载时中止活跃流式请求
   useEffect(() => {
-    if (!sessionId) return;
-    const cacheKey = `autix_chat_msgs_${sessionId}`;
-    try {
-      const raw = localStorage.getItem(cacheKey);
-      if (raw) {
-        const parsed = JSON.parse(raw) as ChatMessage[];
-        setMessages(parsed);
-      } else {
-        setMessages([]);
-      }
-    } catch {
-      setMessages([]);
-    }
-  }, [sessionId]);
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
 
-  // 保持消息滚动
+  // 保持消息与流式滚动
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+  }, [messages, loading, isStreaming, streamingText]);
 
   // 保存消息至当前会话缓存
   const updateMessages = useCallback(
     (newMessages: ChatMessage[]) => {
       setMessages(newMessages);
-      if (sessionId) {
-        try {
-          localStorage.setItem(
-            `autix_chat_msgs_${sessionId}`,
-            JSON.stringify(newMessages)
-          );
-        } catch (err) {
-          console.error("Failed to cache messages:", err);
-        }
-      }
+      saveStoredSessionMessages(sessionId, newMessages);
     },
     [sessionId]
   );
+
+  // 9.6.3 处理 LangGraph 细粒度流式分析（调用 /api/graph/stream）
+  const handleStreamGraph = async (trimmed: string, userMsg: ChatMessage) => {
+    setIsStreaming(true);
+    setLoading(true);
+    setCurrentProgress({
+      agent: "triage",
+      agentDisplayName: "需求分诊",
+      step: 1,
+      totalSteps: 6,
+      status: "started",
+    });
+    setParallelAgents({});
+    setStreamingText("");
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    let accumulatedTokens = "";
+    const recordedParallelAgents: Record<string, ProgressInfo> = {};
+
+    try {
+      await streamGraphAnalysis({
+        apiBaseUrl,
+        input: trimmed,
+        signal: controller.signal,
+        onEvent: (event) => {
+          if (event.type === "node_start" || event.type === "node_end") {
+            const info: ProgressInfo = {
+              agent: event.node || "unknown",
+              agentDisplayName: event.displayName || event.node || "处理中",
+              step: event.step || 1,
+              totalSteps: event.totalSteps || 6,
+              status: event.type === "node_start" ? "started" : "completed",
+              parallel: event.parallel,
+            };
+
+            if (event.parallel) {
+              recordedParallelAgents[info.agent] = info;
+              setParallelAgents((prev) => ({
+                ...prev,
+                [info.agent]: info,
+              }));
+            } else {
+              setCurrentProgress(info);
+            }
+          } else if (event.type === "token" && event.token) {
+            accumulatedTokens += event.token;
+            setStreamingText((prev) => prev + event.token);
+          } else if (event.type === "error" && event.error) {
+            setError(event.error);
+          }
+        },
+        onError: (err) => {
+          setError(err.message);
+        },
+      });
+
+      // 流式结束：将主流程和并行专家的结果沉淀为结构化 StepsProgress 组件与总结文本
+      const parallelItems = Object.values(recordedParallelAgents);
+      const mainStepsMeta: StepItem[] = [
+        { title: "需求分诊", description: "意图初筛与路由分发", status: "completed" },
+        { title: "意图分类", description: "细粒度意图与领域划分", status: "completed" },
+        { title: "需求提取", description: "关键实体与上下文抽取", status: "completed" },
+        { title: "多维度分析", description: "并行专家集群深度评估", status: "completed" },
+        { title: "综合报告", description: "跨专家结论智能汇聚", status: "completed" },
+      ];
+      const parallelStepsMeta: StepItem[] = parallelItems.map((p) => ({
+        title: p.agentDisplayName,
+        description: p.status === "completed" ? "专家评审完成" : "分析中",
+        status: p.status === "completed" ? "completed" : "running",
+        parallel: true,
+      }));
+
+      const assistantMsg: ChatMessage = {
+        id: `assistant-stream-${Date.now()}`,
+        role: "assistant",
+        content:
+          accumulatedTokens.trim() ||
+          "✅ LangGraph Multi-Agent 深度图分析已完成，各领域专家已协同输出综合评估结论。",
+        components: [
+          {
+            type: "steps",
+            title: "Multi-Agent 拓扑执行链路",
+            currentStep: 5,
+            totalSteps: 5,
+            status: "success",
+            items: [...mainStepsMeta, ...parallelStepsMeta],
+          },
+        ],
+        timestamp: new Date().toLocaleTimeString(),
+      };
+
+      updateMessages([...messages, userMsg, assistantMsg]);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
+      const errorMsg: ChatMessage = {
+        id: `error-${Date.now()}`,
+        role: "assistant",
+        content: `⚠️ 多智能体流式执行失败: ${msg}`,
+        timestamp: new Date().toLocaleTimeString(),
+      };
+      updateMessages([...messages, userMsg, errorMsg]);
+    } finally {
+      setIsStreaming(false);
+      setLoading(false);
+      setCurrentProgress(null);
+      setParallelAgents({});
+      setStreamingText("");
+      abortControllerRef.current = null;
+    }
+  };
 
   // 发送自然语言对话
   const handleSendText = async (textToSend?: string) => {
     const raw = textToSend !== undefined ? textToSend : input;
     const trimmed = raw.trim();
-    if (!trimmed || loading || !sessionId) return;
+    if (!trimmed || loading || isStreaming || !sessionId) return;
 
     setError(null);
     setInput("");
@@ -131,6 +254,13 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       content: trimmed,
       timestamp: new Date().toLocaleTimeString(),
     };
+
+    // 关键分支：若开启了 Multi-Agent 深度图分析模式，接入 /api/graph/stream SSE
+    if (deepSearchEnabled) {
+      updateMessages([...messages, userMsg]);
+      await handleStreamGraph(trimmed, userMsg);
+      return;
+    }
 
     const nextMsgs = [...messages, userMsg];
     updateMessages(nextMsgs);
@@ -516,11 +646,34 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           );
         })}
 
-        {/* 等待推理状态 */}
-        {loading && (
+        {/* 流式动态思考指示器 (教程 9.2~9.6 前端多智能体流式与并行专家实时面板) */}
+        {isStreaming && (
+          <ThinkingIndicator
+            progress={currentProgress}
+            parallelAgents={parallelAgents}
+            streamingText={streamingText}
+          />
+        )}
+
+        {/* 非流式常规等待状态 */}
+        {loading && !isStreaming && (
           <div className="flex items-center gap-2 text-xs text-neutral-400 pt-1">
             <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
             <span>AI 正在思考并组织协议组件...</span>
+          </div>
+        )}
+
+        {/* 统一错误气泡提示 */}
+        {error && (
+          <div className="rounded-xl border border-rose-900/60 bg-rose-950/30 px-3.5 py-2 text-xs text-rose-300 flex items-center justify-between">
+            <span>⚠️ {error}</span>
+            <button
+              type="button"
+              onClick={() => setError(null)}
+              className="text-neutral-400 hover:text-white ml-2 text-xs cursor-pointer"
+            >
+              ✕
+            </button>
           </div>
         )}
 
@@ -540,7 +693,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                 handleSendText();
               }
             }}
-            placeholder="What do you want to know?"
+            placeholder="描述您的需求或输入测试指令 (支持 Multi-Agent 流式图推演)..."
             rows={2}
             className="w-full bg-transparent text-sm text-neutral-100 placeholder-neutral-500 resize-none focus:outline-none custom-scrollbar"
           />
@@ -559,38 +712,48 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                 </svg>
               </button>
 
-              {/* 深度搜索模式胶囊 (Deep Search) */}
+              {/* Multi-Agent 深度图分析模式胶囊 (9.6.3 核心流式开关) */}
               <button
                 type="button"
                 onClick={() => setDeepSearchEnabled(!deepSearchEnabled)}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs transition cursor-pointer ${
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition cursor-pointer ${
                   deepSearchEnabled
-                    ? "bg-blue-600/20 text-blue-400 border border-blue-500/40"
+                    ? "bg-cyan-950/50 text-cyan-300 border border-cyan-500/50 shadow-[0_0_12px_rgba(6,182,212,0.15)]"
                     : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:border-neutral-700 hover:text-neutral-300"
                 }`}
+                title="开启后将调用 LangGraph 细粒度流式引擎与并行专家集群"
               >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-                </svg>
-                <span>Deep Search</span>
-                <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                </svg>
+                <span className={deepSearchEnabled ? "text-cyan-400" : "text-neutral-500"}>⚡</span>
+                <span>Multi-Agent 深度流</span>
+                {deepSearchEnabled && (
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                )}
               </button>
             </div>
 
-            {/* 向上发送按钮 */}
-            <button
-              type="button"
-              onClick={() => handleSendText()}
-              disabled={!input.trim() || loading}
-              title="发送"
-              className="w-7 h-7 rounded-xl bg-neutral-800 hover:bg-blue-600 text-neutral-400 hover:text-white flex items-center justify-center transition disabled:opacity-30 disabled:hover:bg-neutral-800 disabled:hover:text-neutral-400 cursor-pointer disabled:cursor-not-allowed"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 10l7-7m0 0l7 7m-7-7v18" />
-              </svg>
-            </button>
+            {/* 发送 / 中止按钮 */}
+            {isStreaming ? (
+              <button
+                type="button"
+                onClick={() => abortControllerRef.current?.abort()}
+                title="中断生成"
+                className="w-7 h-7 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/50 flex items-center justify-center transition cursor-pointer"
+              >
+                <span className="w-2.5 h-2.5 rounded-xs bg-rose-400" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleSendText()}
+                disabled={!input.trim() || loading}
+                title="发送"
+                className="w-7 h-7 rounded-xl bg-neutral-800 hover:bg-cyan-600 text-neutral-400 hover:text-white flex items-center justify-center transition disabled:opacity-30 disabled:hover:bg-neutral-800 disabled:hover:text-neutral-400 cursor-pointer disabled:cursor-not-allowed"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
       </div>

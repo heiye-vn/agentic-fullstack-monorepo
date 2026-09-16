@@ -2,7 +2,7 @@
 
 llm:
   # 默认模型标识
-  modelName: qwen3.7-flash
+  modelName: qwen3.8-max
   # 生成温度：0 = 确定性输出，1 = 高随机性
   temperature: 0
   # 单次最大生成 token 数

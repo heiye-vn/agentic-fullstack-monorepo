@@ -32,7 +32,7 @@ export const ModelConfigPanel: React.FC<ModelConfigPanelProps> = ({
   // 表单状态
   const [formName, setFormName] = useState("");
   const [formProvider, setFormProvider] = useState("dashscope");
-  const [formModelName, setFormModelName] = useState("qwen3.7-flash");
+  const [formModelName, setFormModelName] = useState("qwen3.8-max");
   const [formType, setFormType] = useState("general");
   const [formPriority, setFormPriority] = useState<number>(0);
   const [formVisibility, setFormVisibility] = useState<"private" | "public">("private");
@@ -48,7 +48,7 @@ export const ModelConfigPanel: React.FC<ModelConfigPanelProps> = ({
     setEditingId(null);
     setFormName("");
     setFormProvider("dashscope");
-    setFormModelName("qwen3.7-flash");
+    setFormModelName("qwen3.8-max");
     setFormType("general");
     setFormPriority(0);
     setFormVisibility("private");

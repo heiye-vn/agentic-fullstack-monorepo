@@ -78,13 +78,48 @@ export class GraphController {
       return subject.asObservable();
     }
 
-    // 关键步骤 2：异步执行 LangGraph 节点级流式更新（streamMode: "updates"）
+    const NODE_DISPLAY_NAMES: Record<string, string> = {
+      triage: '需求分诊',
+      classifier: '意图分类',
+      extractStep: '需求提取',
+      clarifyStep: '需求澄清',
+      analysisStep: '多维度分析',
+      riskStep: '风险评估',
+      summaryStep: '综合报告',
+      queryHandler: '查询处理',
+      chatHandler: '闲聊回复',
+      supervisor: '专家调度',
+      functional_expert: '功能分析专家',
+      performance_expert: '性能分析专家',
+      security_expert: '安全分析专家',
+      compliance_expert: '合规分析专家',
+      aggregator: '结论汇总',
+    };
+
+    const EXPERT_SUBGRAPH_NODES = new Set([
+      'supervisor',
+      'functional_expert',
+      'performance_expert',
+      'security_expert',
+      'compliance_expert',
+      'aggregator',
+    ]);
+
+    // 关键步骤 2：异步执行 LangGraph 节点级流式更新（streamEvents 细粒度流）
     (async () => {
       try {
         for await (const event of streamAnalysisGraph(rawInput)) {
+          const nodeName = event.node || event.step;
+          const isParallel = nodeName ? EXPERT_SUBGRAPH_NODES.has(nodeName) : false;
+          const enrichedEvent = {
+            ...event,
+            parallel: isParallel,
+            displayName: nodeName ? NODE_DISPLAY_NAMES[nodeName] || nodeName : undefined,
+          };
+
           // 关键步骤 3：序列化为标准 SSE 格式数据并实时推送到客户端
           subject.next({
-            data: JSON.stringify(event),
+            data: JSON.stringify(enrichedEvent),
           });
         }
       } catch (err: any) {

@@ -7,6 +7,21 @@ import {
   type ClarificationResult,
 } from './sub-agents.js';
 import type { ChatOpenAI } from '@langchain/openai';
+import type {
+  AIUIResponse,
+  ConfirmationComponent,
+  StepsComponent,
+  StepItem,
+  CardComponent,
+  UIResponse,
+} from '../ui-protocol/ui-types.js';
+
+export interface ToUIResponseOptions {
+  isInterrupted?: boolean;
+  threadId?: string;
+  confirmTitle?: string;
+  confirmSummary?: string;
+}
 
 /**
  * 工作流单步执行记录
@@ -37,6 +52,20 @@ export interface OrchestrationResult {
   steps: OrchestrationStep[];
   /** 最终需求分析规格报告（Markdown 文本） */
   report: string;
+}
+
+/**
+ * 第九章 9.6.3.1 流式编排事件契约
+ */
+export interface OrchestratorStreamEvent {
+  type: 'agent_start' | 'agent_end' | 'token' | 'log' | 'complete' | 'error';
+  agent?: string;
+  step?: number;
+  totalSteps?: number;
+  parallel?: boolean;
+  content?: string;
+  result?: any;
+  error?: string;
 }
 
 /**
@@ -296,6 +325,360 @@ export class OrchestratorService {
         steps,
         report: '',
       };
+    }
+  }
+
+  /**
+   * 9.6.3 UI 协议升级：将状态机或工作流结果转换为标准化 UI 响应 (toUIResponse)
+   *
+   * 核心能力：
+   * 1. interrupted 时渲染 confirmation 组件（支持 HITL 人工介入）
+   * 2. steps 组件动态生成：从 state.activeExperts 读取并行激活专家
+   * 3. 动态为每个专家添加 step（label: `${expert}_expert`, status: completed/running）
+   * 4. 保持向后兼容：同时支持旧版 OrchestrationResult 与 LangGraph State 结构
+   */
+  toUIResponse(
+    stateOrResult: any,
+    options?: ToUIResponseOptions,
+  ): AIUIResponse {
+    const components: UIResponse[] = [];
+    const isInterrupted = Boolean(
+      options?.isInterrupted ||
+        stateOrResult?.isInterrupted ||
+        stateOrResult?.status === 'clarification_needed' ||
+        (Array.isArray(stateOrResult?.next) && stateOrResult.next.length > 0),
+    );
+
+    // 1. 组装自然语言文本
+    let message = '';
+    if (isInterrupted) {
+      message =
+        stateOrResult?.message ||
+        '需求分析流程已暂停在人工澄清节点，请确认或补充相关信息后继续。';
+    } else if (stateOrResult?.summary || stateOrResult?.report) {
+      message = stateOrResult.summary || stateOrResult.report;
+    } else if (stateOrResult?.queryResponse || stateOrResult?.chatResponse) {
+      message = stateOrResult.queryResponse || stateOrResult.chatResponse;
+    } else {
+      message = stateOrResult?.message || '需求分析流程处理完成。';
+    }
+
+    // 2. interrupted 时渲染 confirmation 组件（HITL）
+    if (isInterrupted) {
+      const questions =
+        stateOrResult?.clarificationQuestions ||
+        stateOrResult?.clarified?.questions ||
+        stateOrResult?.clarified?.clarificationQuestions ||
+        [];
+
+      const confirmationComp: ConfirmationComponent = {
+        type: 'confirmation',
+        title: options?.confirmTitle || '需求澄清人工确认',
+        summary:
+          options?.confirmSummary ||
+          '检测到当前需求需人工介入澄清与确认，请核实当前抽取要素后继续执行分析。',
+        warning:
+          questions.length > 0
+            ? `待确认事项：${questions.join('；')}`
+            : undefined,
+        details: {
+          threadId: options?.threadId || stateOrResult?.threadId,
+          ...(stateOrResult?.extracted && typeof stateOrResult.extracted === 'object'
+            ? { extracted: stateOrResult.extracted }
+            : {}),
+        },
+        confirmText: '确认继续',
+        cancelText: '取消终止',
+        actionKey: 'resume_analysis',
+      };
+      components.push(confirmationComp);
+    }
+
+    // 3. steps 组件动态生成
+    const dynamicStepItems: Array<{
+      title: string;
+      label: string;
+      status: 'completed' | 'running' | 'wait' | 'finish' | 'process' | 'error';
+      description?: string;
+      parallel?: boolean;
+    }> = [];
+
+    if (
+      Array.isArray(stateOrResult?.activeExperts) &&
+      stateOrResult.activeExperts.length > 0
+    ) {
+      // 3.1 前置步骤：抽取与澄清
+      dynamicStepItems.push({
+        title: '需求抽取',
+        label: 'extractStep',
+        status: stateOrResult?.extracted ? 'completed' : 'running',
+        description: '需求关键要素提取与结构化解析',
+      });
+
+      dynamicStepItems.push({
+        title: '需求澄清',
+        label: 'clarifyStep',
+        status:
+          stateOrResult?.clarified && !isInterrupted
+            ? 'completed'
+            : isInterrupted
+              ? 'running'
+              : 'wait',
+        description: '完整性与边界校验',
+      });
+
+      // 3.2 动态为每个专家添加 step（label: `${expert}_expert`, status: completed/running）
+      for (const expert of stateOrResult.activeExperts) {
+        const expertField = `${expert}Analysis`;
+        const hasExpertFinished = Boolean(
+          stateOrResult[expertField] ||
+            (stateOrResult.analysisResult && !isInterrupted),
+        );
+
+        dynamicStepItems.push({
+          title: `${expert}_expert`,
+          label: `${expert}_expert`,
+          status: hasExpertFinished
+            ? 'completed'
+            : isInterrupted
+              ? 'wait'
+              : 'running',
+          description: `${expert} 领域专家分析`,
+          parallel: true,
+        });
+      }
+
+      // 3.3 后置步骤：风控与报告
+      dynamicStepItems.push({
+        title: '风险评估',
+        label: 'riskStep',
+        status:
+          stateOrResult?.riskResult || stateOrResult?.risk
+            ? 'completed'
+            : 'wait',
+        description: '安全与合规风险排查',
+      });
+
+      dynamicStepItems.push({
+        title: '综合报告',
+        label: 'summaryStep',
+        status: stateOrResult?.summary ? 'completed' : 'wait',
+        description: '最终需求规格说明书与评审',
+      });
+    } else if (
+      Array.isArray(stateOrResult?.steps) &&
+      stateOrResult.steps.length > 0
+    ) {
+      // 3.4 向后兼容：固定工作流 OrchestrationStep[] 或字符串 steps
+      for (const step of stateOrResult.steps) {
+        if (typeof step === 'string') {
+          dynamicStepItems.push({
+            title: step,
+            label: step,
+            status: 'completed',
+          });
+        } else if (typeof step === 'object' && step !== null) {
+          dynamicStepItems.push({
+            title: step.agent || step.title || 'step',
+            label: step.agent || step.label || 'step',
+            status:
+              step.status === 'success'
+                ? 'completed'
+                : step.status === 'failed'
+                  ? 'error'
+                  : 'running',
+            description: step.error || undefined,
+          });
+        }
+      }
+    }
+
+    if (dynamicStepItems.length > 0) {
+      const currentStepIndex = dynamicStepItems.findIndex(
+        (item) => item.status === 'running' || item.status === 'process',
+      );
+      const stepsComp: StepsComponent = {
+        type: 'steps',
+        title: '需求分析流转生命周期',
+        currentStep:
+          currentStepIndex >= 0 ? currentStepIndex : dynamicStepItems.length,
+        items: dynamicStepItems as any,
+        steps: dynamicStepItems as any,
+      };
+      components.push(stepsComp);
+    }
+
+    // 4. 规格报告卡片组件（未中断且有报告时呈现）
+    if (!isInterrupted && (stateOrResult?.summary || stateOrResult?.report)) {
+      const cardComp: CardComponent = {
+        type: 'card',
+        title: '需求分析规格报告',
+        status: 'completed',
+        fields: [
+          {
+            label: '意图类别',
+            value: stateOrResult?.intent || 'analyze',
+          },
+          ...(stateOrResult?.extracted?.priority
+            ? [
+                {
+                  label: '优先级',
+                  value: String(stateOrResult.extracted.priority),
+                },
+              ]
+            : []),
+        ],
+        footer: 'AI 自动生成需求分析规格说明书',
+      };
+      components.push(cardComp);
+    }
+
+    return {
+      message,
+      components,
+      context: {
+        sessionStage: isInterrupted ? 'clarification_interrupted' : 'completed',
+        collectedData: stateOrResult?.extracted || {},
+      },
+    };
+  }
+
+  /**
+   * 9.6.3.1 流式编排方法 (streamOrchestrate)
+   * 消费 streamAnalysisGraph 事件流，通过主图与专家子图双映射，
+   * 输出适合 SSE 传输的 OrchestratorStreamEvent，为并行专家打上 parallel: true 标记
+   *
+   * @param input 用户需求输入
+   * @param options 可选上下文与模型
+   */
+  async *streamOrchestrate(
+    input: string,
+    options?: {
+      retrievedContext?: string;
+      model?: any;
+      useMultiAgent?: boolean;
+    },
+  ): AsyncGenerator<OrchestratorStreamEvent> {
+    let currentStep = 0;
+
+    // ① 主图节点 → Agent 名（参与主 step 计数）
+    const nodeToAgentMap: Record<string, string> = {
+      triage: 'triageAgent',
+      classifier: 'classifierAgent',
+      extractStep: 'extractAgent',
+      clarifyStep: 'clarifyAgent',
+      analysisStep: 'analysisAgent',
+      riskStep: 'riskAgent',
+      summaryStep: 'summaryAgent',
+      queryHandler: 'queryAgent',
+      chatHandler: 'chatAgent',
+    };
+
+    // ② 9.2 专家子图节点 → Agent 名（不参与主 step 计数，标记 parallel）
+    const expertSubgraphMap: Record<string, string> = {
+      supervisor: 'supervisorAgent',
+      functional_expert: 'functionalExpert',
+      performance_expert: 'performanceExpert',
+      security_expert: 'securityExpert',
+      compliance_expert: 'complianceExpert',
+      aggregator: 'aggregatorAgent',
+    };
+
+    // 进度条主链 6 步基准
+    const agentOrder = [
+      'triageAgent',
+      'extractAgent',
+      'clarifyAgent',
+      'analysisAgent',
+      'riskAgent',
+      'summaryAgent',
+    ];
+
+    const { streamAnalysisGraph } = await import(
+      '../graph/requirement-analysis-graph.js'
+    );
+
+    const stream = streamAnalysisGraph(
+      {
+        input,
+        retrievedContext: options?.retrievedContext || '',
+      },
+      {
+        model: options?.model,
+        useMultiAgent: options?.useMultiAgent ?? true,
+        useTriage: true,
+      },
+    );
+
+    for await (const event of stream) {
+      if (event.type === 'node_start' && (event.node || event.step)) {
+        const nodeName = event.node || event.step || '';
+        if (nodeName in expertSubgraphMap) {
+          // 子图节点：沿用父 step，标记 parallel: true
+          yield {
+            type: 'agent_start',
+            agent: expertSubgraphMap[nodeName],
+            step: currentStep,
+            totalSteps: agentOrder.length,
+            parallel: true,
+          };
+        } else {
+          // 主图节点：推进主 step 计数
+          const agentName = nodeToAgentMap[nodeName] || nodeName;
+          const idx = agentOrder.indexOf(agentName);
+          currentStep = idx >= 0 ? idx + 1 : currentStep + 1;
+          yield {
+            type: 'agent_start',
+            agent: agentName,
+            step: currentStep,
+            totalSteps: agentOrder.length,
+            parallel: false,
+          };
+        }
+      } else if (event.type === 'node_end' && (event.node || event.step)) {
+        const nodeName = event.node || event.step || '';
+        if (nodeName in expertSubgraphMap) {
+          yield {
+            type: 'agent_end',
+            agent: expertSubgraphMap[nodeName],
+            step: currentStep,
+            totalSteps: agentOrder.length,
+            parallel: true,
+            result: event.output,
+          };
+        } else {
+          const agentName = nodeToAgentMap[nodeName] || nodeName;
+          yield {
+            type: 'agent_end',
+            agent: agentName,
+            step: currentStep,
+            totalSteps: agentOrder.length,
+            parallel: false,
+            result: event.output,
+          };
+        }
+      } else if (event.type === 'token') {
+        yield {
+          type: 'token',
+          content: event.content,
+          agent: event.node
+            ? expertSubgraphMap[event.node] || nodeToAgentMap[event.node]
+            : undefined,
+        };
+      } else if (event.type === 'error') {
+        yield {
+          type: 'error',
+          error: event.error,
+        };
+      } else if (event.type === 'done') {
+        yield {
+          type: 'complete',
+          result: {
+            status: 'completed',
+            totalSteps: agentOrder.length,
+          },
+        };
+      }
     }
   }
 }

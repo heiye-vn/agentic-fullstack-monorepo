@@ -4,6 +4,8 @@ import {
   StateGraph,
   START,
   END,
+  MemorySaver,
+  type BaseCheckpointSaver,
 } from '@langchain/langgraph';
 import { ToolNode } from '@langchain/langgraph/prebuilt';
 import {
@@ -27,8 +29,14 @@ import {
   searchRequirementTool,
   checkConflictsTool,
 } from '../tools/business.tools.js';
+import { createAnalysisSupervisorSubGraph } from './experts.js';
 
-export { analysisTools, searchRequirementTool, checkConflictsTool };
+export {
+  analysisTools,
+  searchRequirementTool,
+  checkConflictsTool,
+  createAnalysisSupervisorSubGraph,
+};
 
 /**
  * 意图分类 Zod Schema
@@ -43,6 +51,32 @@ export const IntentClassificationSchema = z.object({
 });
 
 export type IntentClassification = z.infer<typeof IntentClassificationSchema>;
+
+/**
+ * 第九章 9.4: Handoff 分诊 Zod Schema
+ * action:
+ * - 'answer': 闲聊/简单咨询，直接回答用户
+ * - 'handoff_to_query': 查询已有需求状态或信息，交接给 queryHandler
+ * - 'handoff_to_analysis': 复杂新需求，交接给抽取与多专家分析
+ */
+export const triageSchema = z.object({
+  action: z
+    .enum(['answer', 'handoff_to_query', 'handoff_to_analysis'])
+    .describe(
+      '分诊决策：answer（日常闲聊/通用咨询，直接回复）、handoff_to_query（查询已有需求状态，移交查询处理）、handoff_to_analysis（提出新需求，移交多专家分析链路）',
+    ),
+  response: z
+    .string()
+    .default('')
+    .describe('当 action="answer" 时直接回复用户的内容'),
+  reason: z
+    .string()
+    .nullable()
+    .optional()
+    .describe('交接理由（可选）'),
+});
+
+export type TriageOutput = z.infer<typeof triageSchema>;
 
 /**
  * 意图分类 System Prompt
@@ -204,7 +238,7 @@ export function fallbackIntentClassifier(input: string): {
  */
 export const RequirementAnalysisState = Annotation.Root({
   ...MessagesAnnotation.spec,
-  intent: Annotation<'analyze' | 'query' | 'chat'>({
+  intent: Annotation<'analyze' | 'query' | 'chat' | 'risk_only'>({
     reducer: (_, next) => next,
     default: () => 'analyze',
   }),
@@ -269,6 +303,37 @@ export const RequirementAnalysisState = Annotation.Root({
     reducer: (_, next) => next ?? '',
     default: () => '',
   }),
+  // 第九章 State 契约：原始输入文本
+  input: Annotation<string>({
+    reducer: (_, next) => next ?? '',
+    default: () => '',
+  }),
+  // 第九章 9.2: 多专家分析结果字段与激活专家列表
+  functionalAnalysis: Annotation<string>({
+    reducer: (prev, next) => (next && next.trim() ? next : (prev ?? '')),
+    default: () => '',
+  }),
+  performanceAnalysis: Annotation<string>({
+    reducer: (prev, next) => (next && next.trim() ? next : (prev ?? '')),
+    default: () => '',
+  }),
+  securityAnalysis: Annotation<string>({
+    reducer: (prev, next) => (next && next.trim() ? next : (prev ?? '')),
+    default: () => '',
+  }),
+  complianceAnalysis: Annotation<string>({
+    reducer: (prev, next) => (next && next.trim() ? next : (prev ?? '')),
+    default: () => '',
+  }),
+  activeExperts: Annotation<string[]>({
+    reducer: (_prev, next) => (next && next.length > 0 ? next : (_prev ?? [])), // 每次由 supervisor 覆盖
+    default: () => [],
+  }),
+  // 第九章 9.4: Handoff 分诊交接理由
+  handoffReason: Annotation<string>({
+    reducer: (_, next) => next ?? '',
+    default: () => '',
+  }),
 });
 
 export type RequirementAnalysisStateType =
@@ -326,6 +391,93 @@ export async function classifierNode(
     return {
       intent: fallback.intent,
       steps: ['classifier'],
+    };
+  }
+}
+
+/**
+ * 0. Handoff 分诊节点 (triageNode) - 第九章 9.4
+ * 接收 state 和 config: { model } 参数，通过结构化输出决定是直接回复还是交接专家
+ */
+export async function triageNode(
+  state: RequirementAnalysisStateType,
+  config?: { model?: BaseChatModel } | any,
+): Promise<Partial<RequirementAnalysisStateType>> {
+  const model =
+    config?.model ?? createChatModel({ temperature: 0, streaming: false });
+  const input = extractInputText(state) || state.input || '';
+
+  try {
+    const structuredModel = (model as any).withStructuredOutput(triageSchema);
+    const systemPrompt = `你是需求分诊智能体 (Triage Agent)。评估用户的需求输入并做出分诊决策：
+- 闲聊、问候、术语解释、通用咨询：直接作答并回复 -> action: 'answer'（直接在 response 字段中回答用户）
+- 查询已有需求的状态、进度、属性或报告（特别包含 REQ- 需求编号） -> action: 'handoff_to_query'
+- 提出新功能或完整业务需求，需要结构化抽取、多维专家分析 -> action: 'handoff_to_analysis'
+在做交接时，给出简要的交接理由 reason。`;
+
+    const messages = state.messages ?? [];
+    const callMessages: BaseMessage[] = [new SystemMessage(systemPrompt), ...messages];
+    if (messages.length === 0 && input) {
+      callMessages.push(new HumanMessage(input));
+    }
+
+    const result = (await structuredModel.invoke(callMessages)) as TriageOutput;
+
+    if (result.action === 'answer') {
+      const reply = result.response || '您好，请问有什么可以协助您？';
+      return {
+        messages: [new AIMessage(reply)],
+        intent: 'chat',
+        chatResponse: reply,
+        summary: reply,
+        handoffReason: result.reason || '',
+        steps: ['triage'],
+      };
+    }
+
+    if (result.action === 'handoff_to_query') {
+      const reason = result.reason || '查询已有需求状态或信息';
+      return {
+        intent: 'query',
+        handoffReason: reason,
+        steps: ['triage'],
+      };
+    }
+
+    // handoff_to_analysis 及默认分析分支
+    const reason = result.reason || '已分诊交接给需求分析链路';
+    return {
+      messages: [new AIMessage(`[分诊交接 → 需求分析] 理由: ${reason}`)],
+      intent: 'analyze',
+      handoffReason: reason,
+      steps: ['triage'],
+    };
+  } catch {
+    // 降级容灾：基于规则引擎进行 fallback 分类
+    const fallback = fallbackIntentClassifier(input);
+    if (fallback.intent === 'chat') {
+      const reply = '您好！我是需求分析助手，请问有什么可以帮您？';
+      return {
+        messages: [new AIMessage(reply)],
+        intent: 'chat',
+        chatResponse: reply,
+        summary: reply,
+        handoffReason: '降级兜底：识别为日常闲聊',
+        steps: ['triage'],
+      };
+    }
+    if (fallback.intent === 'query') {
+      return {
+        intent: 'query',
+        handoffReason: '降级兜底：识别为需求查询',
+        steps: ['triage'],
+      };
+    }
+    return {
+      messages: [new AIMessage('[分诊交接 → 需求分析] 理由: 降级兜底移交')],
+      intent: 'analyze',
+      handoffReason: '降级兜底：默认移交需求分析',
+      steps: ['triage'],
     };
   }
 }
@@ -424,6 +576,18 @@ export async function clarifyNode(
   state: RequirementAnalysisStateType,
   subAgents: SubAgents,
 ): Promise<Partial<RequirementAnalysisStateType>> {
+  // 9.6.2 HITL 保护：若外部已通过 updateState 注入人工澄清结论（例如 needsClarification === false），优先直接保留
+  if (
+    state.clarified &&
+    typeof state.clarified === 'object' &&
+    (state.clarified as any).needsClarification === false
+  ) {
+    return {
+      clarified: state.clarified,
+      steps: ['clarifyStep'],
+    };
+  }
+
   const input = extractInputText(state);
   const extractionStr =
     typeof state.extracted === 'string'
@@ -989,12 +1153,15 @@ export {
  */
 export function routeByIntent(
   state: RequirementAnalysisStateType,
-): 'extractStep' | 'queryHandler' | 'chatHandler' {
+): 'extractStep' | 'queryHandler' | 'chatHandler' | 'riskStep' | typeof END {
   switch (state.intent) {
     case 'query':
       return 'queryHandler';
     case 'chat':
-      return 'chatHandler';
+      // 9.4 Handoff 优化：若已由 triage 直接答复（具有 chatResponse），短路直接到 END，节省一次调用
+      return state.chatResponse ? END : 'chatHandler';
+    case 'risk_only':
+      return 'riskStep';
     case 'analyze':
     default:
       return 'extractStep';
@@ -1004,30 +1171,64 @@ export function routeByIntent(
 export interface AnalysisGraphOptions {
   subAgents?: SubAgents;
   model?: BaseChatModel;
+  /** 是否启用第九章 9.2 Supervisor + 多专家并行架构（为 true 且提供 model 时切换） */
+  useMultiAgent?: boolean;
+  /** 是否启用第九章 9.4 Triage 分诊节点替代原 classifierNode */
+  useTriage?: boolean;
+  /** 9.6.2 Checkpointer 持久化快照实例（如 MemorySaver 或 PostgresSaver） */
+  checkpointer?: BaseCheckpointSaver;
+  /** 9.6.2 HITL 中断节点列表（在指定节点执行前中断暂停，如 ['clarifyStep']） */
+  interruptBefore?: string[];
 }
 
 /**
  * 构建并编译支持意图分类、ReAct 分析子图与 Critic-Refine 汇总子图的需求分析 LangGraph 图
  * 拓扑结构：
- * - START → classifier
- * - classifier -(routeByIntent)-> extractStep | queryHandler | chatHandler
+ * - START → classifier / triage
+ * - classifier/triage -(routeByIntent)-> extractStep | queryHandler | chatHandler | riskStep | END
  * - queryHandler → END
  * - chatHandler → END
  * - extractStep → clarifyStep → (analysisStep // riskStep) → summaryStep → END
  *   其中 analysisStep 挂载 ReAct 子图 createAnalysisSubGraph()
+ *   或通过 useMultiAgent: true 升级为 Supervisor 多专家子图 createAnalysisSupervisorSubGraph()
  *   summaryStep 挂载 Critic-Refine 子图 createSummarySubGraph()
+ *
+ * 支持 options 配置 checkpointer 与 interruptBefore 开启 HITL 人工介入能力
  */
-export function createAnalysisGraph(options?: AnalysisGraphOptions) {
+export function createAnalysisGraph(
+  modelOrOptions?: BaseChatModel | AnalysisGraphOptions,
+  extraOptions?: AnalysisGraphOptions,
+) {
+  let options: AnalysisGraphOptions = {};
+  if (modelOrOptions && 'invoke' in modelOrOptions) {
+    options = {
+      model: modelOrOptions as BaseChatModel,
+      ...extraOptions,
+    };
+  } else if (modelOrOptions) {
+    options = {
+      ...(modelOrOptions as AnalysisGraphOptions),
+      ...extraOptions,
+    };
+  }
+
   const agents = options?.subAgents ?? defaultSubAgents;
   const model = options?.model;
-  const analysisSubGraph = createAnalysisSubGraph(options);
+  // 9.2: 若显式开启 useMultiAgent 且提供 model，则升级为 Supervisor + 4 专家架构；默认保留原单 Agent 子图
+  const analysisSubGraph =
+    options?.useMultiAgent && model
+      ? createAnalysisSupervisorSubGraph(model)
+      : createAnalysisSubGraph(options);
   const summarySubGraph = createSummarySubGraph(options);
   const builder = new StateGraph(RequirementAnalysisState);
 
-  const graphWithNodes = builder
-    .addNode('classifier', (state: RequirementAnalysisStateType) =>
-      classifierNode(state, { model }),
-    )
+  const startNode = options?.useTriage ? 'triage' : 'classifier';
+  const startNodeFn = options?.useTriage
+    ? (state: RequirementAnalysisStateType) => triageNode(state, { model })
+    : (state: RequirementAnalysisStateType) => classifierNode(state, { model });
+
+  const graphWithNodes = (builder as any)
+    .addNode(startNode, startNodeFn)
     .addNode('queryHandler', (state: RequirementAnalysisStateType) =>
       queryHandlerNode(state, { model }),
     )
@@ -1040,19 +1241,31 @@ export function createAnalysisGraph(options?: AnalysisGraphOptions) {
     .addNode('clarifyStep', (state: RequirementAnalysisStateType) =>
       clarifyNode(state, agents),
     )
-    .addNode('analysisStep', analysisSubGraph)
+    .addNode('analysisStep', analysisSubGraph as any)
     .addNode('riskStep', (state: RequirementAnalysisStateType) =>
       riskNode(state, agents),
     )
     .addNode('summaryStep', summarySubGraph);
 
+  const conditionalDestinations: Record<string, string> = {
+    extractStep: 'extractStep',
+    queryHandler: 'queryHandler',
+    chatHandler: 'chatHandler',
+    riskStep: 'riskStep',
+    [END]: END,
+  };
+
+  const compileOptions: Record<string, any> = {};
+  if (options?.checkpointer) {
+    compileOptions.checkpointer = options.checkpointer;
+  }
+  if (options?.interruptBefore && options.interruptBefore.length > 0) {
+    compileOptions.interruptBefore = options.interruptBefore;
+  }
+
   return graphWithNodes
-    .addEdge(START, 'classifier')
-    .addConditionalEdges('classifier', routeByIntent, {
-      extractStep: 'extractStep',
-      queryHandler: 'queryHandler',
-      chatHandler: 'chatHandler',
-    })
+    .addEdge(START, startNode)
+    .addConditionalEdges(startNode, routeByIntent as any, conditionalDestinations)
     .addEdge('queryHandler', END)
     .addEdge('chatHandler', END)
     .addEdge('extractStep', 'clarifyStep')
@@ -1061,7 +1274,119 @@ export function createAnalysisGraph(options?: AnalysisGraphOptions) {
     .addEdge('analysisStep', 'summaryStep')
     .addEdge('riskStep', 'summaryStep')
     .addEdge('summaryStep', END)
-    .compile();
+    .compile(Object.keys(compileOptions).length > 0 ? compileOptions : undefined);
+}
+
+// ============================================================
+// 9.6.2 Checkpointer + HITL 人工介入生态
+// ============================================================
+
+/**
+ * 9.6.2 默认 Checkpointer 实例
+ * 默认使用 MemorySaver 保持多轮调用状态；生产环境通过 initPostgresCheckpointer 切换为 PostgresSaver
+ */
+export let hitlCheckpointer: BaseCheckpointSaver = new MemorySaver();
+
+/**
+ * 9.6.2 thread_id 标准命名规范
+ * 格式：user-{userId}:session-{sessionId}
+ */
+export function formatThreadId(userId: string, sessionId: string): string {
+  return `user-${userId}:session-${sessionId}`;
+}
+
+/**
+ * 9.6.2 PostgresSaver 配置与初始化
+ * - 从环境变量 DATABASE_URL 读取连接串
+ * - 与第五章会话库共用同一个 PostgreSQL 数据库
+ * - 调用 checkpointer.setup() 自动创建 Checkpoint 所需表结构
+ */
+export async function initPostgresCheckpointer(
+  databaseUrl?: string,
+): Promise<BaseCheckpointSaver> {
+  const connString = databaseUrl || process.env.DATABASE_URL;
+  if (!connString) {
+    console.warn(
+      '[PostgresSaver] 未配置 DATABASE_URL 环境变量，继续沿用内存 Checkpointer (MemorySaver)',
+    );
+    return hitlCheckpointer;
+  }
+
+  try {
+    const moduleName = '@langchain/langgraph-checkpoint-postgres';
+    const { PostgresSaver } = (await import(moduleName)) as any;
+    const pgSaver = (PostgresSaver as any).fromConnString(connString);
+    await pgSaver.setup();
+    hitlCheckpointer = pgSaver;
+    return pgSaver;
+  } catch (err: any) {
+    console.warn(
+      `[PostgresSaver] 初始化失败 (${err?.message || err})，保持使用 MemorySaver 兜底`,
+    );
+    return hitlCheckpointer;
+  }
+}
+
+/**
+ * 构建带 HITL 人工介入能力的需求分析图 (createAnalysisGraphHITL)
+ * 默认在 clarifyStep 执行前中断暂停，并自动绑定 Checkpointer
+ */
+export function createAnalysisGraphHITL(
+  modelOrOptions?: BaseChatModel | AnalysisGraphOptions,
+  extraOptions?: AnalysisGraphOptions,
+) {
+  let resolvedOptions: AnalysisGraphOptions = {};
+  if (modelOrOptions && 'invoke' in modelOrOptions) {
+    resolvedOptions = {
+      model: modelOrOptions as BaseChatModel,
+      ...extraOptions,
+    };
+  } else if (modelOrOptions) {
+    resolvedOptions = {
+      ...(modelOrOptions as AnalysisGraphOptions),
+      ...extraOptions,
+    };
+  }
+
+  return createAnalysisGraph({
+    ...resolvedOptions,
+    useMultiAgent: resolvedOptions.useMultiAgent ?? true,
+    useTriage: resolvedOptions.useTriage ?? true,
+    checkpointer: resolvedOptions.checkpointer ?? hitlCheckpointer,
+    interruptBefore: resolvedOptions.interruptBefore ?? ['clarifyStep'],
+  });
+}
+
+/**
+ * 9.6.2 第一次调用：启动分析并执行到 clarifyStep 前暂停，返回 State 快照
+ */
+export async function startAnalysisGraphHITL(
+  threadId: string,
+  input: string | AnalysisGraphInput,
+  modelOrOptions?: BaseChatModel | AnalysisGraphOptions,
+) {
+  const graph = createAnalysisGraphHITL(modelOrOptions);
+  const initialInput = normalizeAnalysisInput(input);
+  await graph.invoke(initialInput, {
+    configurable: { thread_id: threadId },
+  });
+  return graph.getState({ configurable: { thread_id: threadId } });
+}
+
+/**
+ * 9.6.2 第二阶段：用户答复澄清问题后，updateState 写回 checkpoint，从断点继续执行
+ */
+export async function resumeAnalysisGraphHITL(
+  threadId: string,
+  patch: Partial<RequirementAnalysisStateType>,
+  modelOrOptions?: BaseChatModel | AnalysisGraphOptions,
+) {
+  const graph = createAnalysisGraphHITL(modelOrOptions);
+  await graph.updateState(
+    { configurable: { thread_id: threadId } },
+    patch,
+  );
+  return graph.invoke(null, { configurable: { thread_id: threadId } });
 }
 
 export type AnalysisGraphInput =
@@ -1074,13 +1399,19 @@ export type AnalysisGraphInput =
  * 需求分析图执行输出契约
  */
 export interface RunAnalysisGraphOutput {
-  intent: 'analyze' | 'query' | 'chat';
+  intent: 'analyze' | 'query' | 'chat' | 'risk_only';
+  handoffReason?: string;
   queryResponse?: string;
   chatResponse?: string;
   extracted?: ExtractedRequirement | Record<string, any>;
   clarified?: ClarificationResult | Record<string, any>;
   analysis?: string;
   analysisResult?: string;
+  functionalAnalysis?: string;
+  performanceAnalysis?: string;
+  securityAnalysis?: string;
+  complianceAnalysis?: string;
+  activeExperts?: string[];
   risk?: string;
   riskResult?: string;
   summary: string;
@@ -1123,60 +1454,166 @@ export function normalizeAnalysisInput(
 }
 
 /**
- * 需求分析图流式节点事件契约
+ * 需求分析图流式节点事件契约 (9.6.3.2)
  */
+export type AnalysisStreamEventType =
+  | 'start'
+  | 'node_start'
+  | 'node_end'
+  | 'token'
+  | 'step:update'
+  | 'done'
+  | 'error';
+
 export interface AnalysisStreamEvent {
-  /** 事件类型：start(启动)、step:update(节点状态增量更新)、done(完成)、error(异常阻断) */
-  type: 'start' | 'step:update' | 'done' | 'error';
-  /** 当前触发事件的图节点标识（如 'classifier', 'extractStep', 'analysisStep', 'summaryStep' 等） */
+  /** 事件类型：start(启动)、node_start(节点进入)、node_end(节点完成)、token(逐字文本块)、step:update(增量兼容)、done(结束)、error(异常) */
+  type: AnalysisStreamEventType;
+  /** 当前触发事件的图节点标识（如 'triage', 'functional_expert', 'analysisStep' 等） */
   step?: string;
-  /** 该节点返回的状态增量 Patch 字典（包含 Partial<State>） */
+  node?: string;
+  /** 该节点返回的状态增量 Patch 字典 */
   patch?: Record<string, any>;
+  /** token 流式文本块内容 */
+  content?: string;
+  /** 节点完整输出 */
+  output?: any;
   /** 发生异常时的错误信息描述 */
   error?: string;
 }
 
 /**
- * 按节点粒度流式执行需求分析图（AsyncGenerator 异步生成器）
- * 基于 LangGraph 原生 streamMode: "updates" 特性，天然契合前端 steps 组件实时感知图状态
+ * 按细粒度事件流式执行需求分析图 (9.6.3.2)
+ * 基于 LangGraph streamEvents(v2) 监听节点级进入、退出及模型 token 事件
+ * 内部过滤 jsonNodes 的 token 输出，并向上层传递主图与专家子图节点生命周期
  *
  * @param input 支持纯字符串或包含 messages/input 的对象
- * @param options 可选注入自定义 subAgents 或 model（便于单元测试打桩）
+ * @param options 可选注入自定义 subAgents 或 model
  */
 export async function* streamAnalysisGraph(
   input: AnalysisGraphInput,
   options?: AnalysisGraphOptions,
 ): AsyncGenerator<AnalysisStreamEvent, void, unknown> {
-  // 关键步骤 1：向客户端推送流式传输启动首包事件
+  // 步骤 1：推送首包启动事件
   yield { type: 'start' };
 
   try {
-    // 关键步骤 2：编译需求分析状态图实例，并归一化初始状态数据
     const graph = createAnalysisGraph(options);
     const initialInput = normalizeAnalysisInput(input);
 
-    // 关键步骤 3：以 updates 增量模式开启 LangGraph 图流式执行
-    // 每一帧 chunk 结构严格映射为：{ [nodeName]: partialState }
-    const stream = await graph.stream(initialInput, {
-      streamMode: 'updates',
-    });
+    // 过滤只产结构化 JSON 的节点 token 事件，防止给前端推半截 JSON 字符串
+    const jsonNodes = new Set([
+      'triage',
+      'extractStep',
+      'clarifyStep',
+      'supervisor',
+    ]);
 
-    // 关键步骤 4：迭代图执行流，实时提取执行节点名称与状态增量
-    for await (const chunk of stream) {
-      const [nodeName, patch] = Object.entries(chunk)[0] ?? [];
-      if (nodeName) {
-        yield {
-          type: 'step:update',
-          step: nodeName,
-          patch: patch as Record<string, any>,
-        };
+    // 关注的主图与专家子图业务节点集合，忽略子图内部的 ReAct agent/tools 循环节点
+    const recognizedNodes = new Set([
+      'triage',
+      'classifier',
+      'extractStep',
+      'clarifyStep',
+      'analysisStep',
+      'supervisor',
+      'functional_expert',
+      'performance_expert',
+      'security_expert',
+      'compliance_expert',
+      'aggregator',
+      'riskStep',
+      'summaryStep',
+      'queryHandler',
+      'chatHandler',
+    ]);
+
+    // 优先尝试采用 LangGraph v2 streamEvents 细粒度事件流
+    if (typeof (graph as any).streamEvents === 'function') {
+      let currentNode = '';
+      const eventStream = (graph as any).streamEvents(initialInput, {
+        version: 'v2',
+      });
+
+      for await (const event of eventStream) {
+        const eventType = event.event;
+        const nodeName =
+          event.metadata?.langgraph_node ||
+          (recognizedNodes.has(event.name) ? event.name : undefined);
+
+        if (eventType === 'on_chain_start' && nodeName && recognizedNodes.has(nodeName)) {
+          if (nodeName !== currentNode) {
+            currentNode = nodeName;
+            yield {
+              type: 'node_start',
+              node: nodeName,
+              step: nodeName,
+            };
+          }
+        } else if (eventType === 'on_chat_model_stream') {
+          // Token 事件：只转发非 JSON 阶段（如专家分析、综合报告）的流式 token
+          if (currentNode && !jsonNodes.has(currentNode)) {
+            const chunk = event.data?.chunk;
+            const content =
+              typeof chunk?.content === 'string'
+                ? chunk.content
+                : Array.isArray(chunk?.content)
+                  ? chunk.content
+                      .map((c: any) => (typeof c === 'string' ? c : c.text || ''))
+                      .join('')
+                  : '';
+            if (content) {
+              yield {
+                type: 'token',
+                node: currentNode,
+                step: currentNode,
+                content,
+              };
+            }
+          }
+        } else if (eventType === 'on_chain_end' && nodeName && recognizedNodes.has(nodeName)) {
+          const output = event.data?.output;
+          yield {
+            type: 'node_end',
+            node: nodeName,
+            step: nodeName,
+            output,
+            patch: typeof output === 'object' ? output : undefined,
+          };
+          // 保持对第 8 章既有消费者的兼容
+          if (output && typeof output === 'object') {
+            yield {
+              type: 'step:update',
+              step: nodeName,
+              patch: output,
+            };
+          }
+        }
+      }
+    } else {
+      // 优雅降级回 updates 模式（如部分打桩测试场景）
+      const stream = await graph.stream(initialInput, {
+        streamMode: 'updates',
+      });
+      for await (const chunk of stream) {
+        const [nodeName, patch] = Object.entries(chunk)[0] ?? [];
+        if (nodeName) {
+          yield {
+            type: 'node_end',
+            node: nodeName,
+            step: nodeName,
+            patch: patch as Record<string, any>,
+          };
+          yield {
+            type: 'step:update',
+            step: nodeName,
+            patch: patch as Record<string, any>,
+          };
+        }
       }
     }
 
-    // 关键步骤 5：整张图执行完毕且所有边已收敛到达 END，推送完成标识
     yield { type: 'done' };
   } catch (err: any) {
-    // 关键步骤 6：异常边界捕获，推送错误事件并防止连接悬挂卡死
     yield {
       type: 'error',
       error: err?.message || String(err),

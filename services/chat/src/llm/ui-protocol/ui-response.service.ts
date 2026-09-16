@@ -66,12 +66,13 @@ export class UIResponseService {
 
   /**
    * 默认模型与预编译 LCEL 管道
-   * 指定 method: 'functionCalling'，完美兼容阿里云百炼 DashScope / OpenAI 的 JSON Schema
+   * 使用 jsonSchema 模式（通过 response_format 约束输出），
+   * 避免 functionCalling 设置 tool_choice: required 与 Qwen3 Thinking Mode 冲突
    */
   private readonly model = createChatModel({ streaming: false });
   private readonly structuredModel = this.model.withStructuredOutput(
     aiUIResponseSchema,
-    { method: 'functionCalling' },
+    { method: 'jsonSchema' },
   );
   private readonly chain = this.prompt.pipe(this.structuredModel);
 
@@ -110,7 +111,7 @@ export class UIResponseService {
         // 自定义模型（单元测试打桩注入）：格式化后调用 structuredModel
         const structuredModel = customModel.withStructuredOutput(
           aiUIResponseSchema,
-          { method: 'functionCalling' },
+          { method: 'jsonSchema' },
         );
         const promptValue = await this.prompt.formatPromptValue({
           input: enrichedInput,

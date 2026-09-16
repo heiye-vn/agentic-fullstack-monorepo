@@ -273,7 +273,7 @@ describe('UI 响应协议与 Structured Output 规范测试套件', () => {
       );
 
       expect(mockWithStructuredOutput).toHaveBeenCalledWith(aiUIResponseSchema, {
-        method: 'functionCalling',
+        method: 'jsonSchema',
       });
       const invokedParam = mockInvoke.mock.calls[0][0];
       const messages = Array.isArray(invokedParam)

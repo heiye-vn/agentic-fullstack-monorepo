@@ -94,14 +94,18 @@ export interface CardComponent {
 
 export interface StepItem {
   title: string;
+  label?: string;
   description?: string;
-  status?: 'wait' | 'process' | 'finish' | 'error';
+  status?: 'wait' | 'process' | 'finish' | 'error' | 'completed' | 'running';
+  parallel?: boolean;
 }
 
 export interface StepsComponent {
   type: 'steps';
   title?: string;
   currentStep: number;
+  totalSteps?: number;
+  status?: string;
   items?: StepItem[];
   steps?: StepItem[];
 }
@@ -136,6 +140,7 @@ export interface ProgressComponent {
   percentage: number;
   status?: 'processing' | 'success' | 'error';
   actionKey?: string;
+  parallel?: boolean;
 }
 
 // ==========================================

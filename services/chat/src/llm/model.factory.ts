@@ -16,6 +16,8 @@ export function createChatModel(
     temperature: number;
     maxTokens: number;
     streaming: boolean;
+    /** 关闭 Qwen3 深度思考模式，避免与 tool_choice: required 冲突 */
+    disableThinking: boolean;
   }>,
 ): ChatOpenAI {
   const config = loadLangChainConfig();
@@ -31,5 +33,11 @@ export function createChatModel(
     configuration: {
       baseURL: keys.openaiBaseUrl,
     },
+    // Qwen3 系列在 Thinking Mode 下不支持 tool_choice: required，
+    // 需要通过 DashScope 扩展参数显式关闭（直接展开到请求 body）
+    ...(overrides?.disableThinking && {
+      modelKwargs: { enable_thinking: false },
+    }),
   });
 }
+
