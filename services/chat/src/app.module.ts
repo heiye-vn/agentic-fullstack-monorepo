@@ -11,6 +11,8 @@ import { MessageModule } from './message/message.module.js';
 import { ConversationModule } from './conversation/conversation.module.js';
 import { DocumentModule } from './document/document.module.js';
 import { SseModule } from './sse/sse.module.js';
+import { ArtifactModule } from './artifact/artifact.module.js';
+import { ModelConfigModule } from './model-config/model-config.module.js';
 
 @Module({
   imports: [
@@ -29,6 +31,8 @@ import { SseModule } from './sse/sse.module.js';
     AdvancedModule,
     UIProtocolModule,
     SseModule,
+    ArtifactModule,
+    ModelConfigModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -11,6 +11,7 @@ import { RunnableWithMessageHistory } from '@langchain/core/runnables';
 import { AppModule } from '../src/app.module.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { RunnableMemoryService } from '../src/llm/memory/runnable-memory.service.js';
+import { ConversationService } from '../src/conversation/conversation.service.js';
 import { DbChatMessageHistory } from '../src/message/db-chat-history.js';
 import { MessageRole } from '../src/prisma/index.js';
 
@@ -42,7 +43,15 @@ describe('ConversationController E2E / API Tests', () => {
     prisma = app.get(PrismaService);
     runnableMemoryService = app.get(RunnableMemoryService);
 
-    // Mock createRunnableWithDbHistory 避免调用外部真实 OpenAI API
+    // Mock createRunnableWithDbHistory 与 createStandardChain 避免调用外部真实 OpenAI API
+    vi.spyOn(runnableMemoryService, 'createStandardChain').mockImplementation(() => {
+      return {
+        stream: async function* () {
+          yield '这是 Controller E2E Mock 的回复内容';
+        },
+      } as any;
+    });
+
     vi.spyOn(runnableMemoryService, 'createRunnableWithDbHistory').mockImplementation(
       (msgService) => {
         const prompt = ChatPromptTemplate.fromMessages([
@@ -131,16 +140,16 @@ describe('ConversationController E2E / API Tests', () => {
       .expect(403);
   });
 
-  it('POST /api/conversations/:id/chat 应该能在会话中对话并自动将两端消息持久化至 PostgreSQL', async () => {
+  it('POST /api/conversations/:id/chat 应该能在会话中流式对话并自动将两端消息持久化至 PostgreSQL', async () => {
     const res = await request(app.getHttpServer())
       .post(`/api/conversations/${createdConvId}/chat`)
       .set('Authorization', `Bearer ${user1Token}`)
       .send({ message: '你好，请帮我生成一个功能' })
       .expect(201);
 
-    expect(res.body.conversationId).toBe(createdConvId);
-    expect(res.body.message).toBe('你好，请帮我生成一个功能');
-    expect(res.body.response).toBe('这是 Controller E2E Mock 的回复内容');
+    expect(res.headers['content-type']).toContain('text/event-stream');
+    expect(res.text).toContain('markdown');
+    expect(res.text).toContain('done');
 
     // 校验 PostgreSQL messages 表中真实落库了两条记录 (USER 和 ASSISTANT)
     const messages = await prisma.message.findMany({
@@ -153,6 +162,15 @@ describe('ConversationController E2E / API Tests', () => {
     expect(messages[0].content).toBe('你好，请帮我生成一个功能');
     expect(messages[1].role).toBe(MessageRole.ASSISTANT);
     expect(messages[1].content).toBe('这是 Controller E2E Mock 的回复内容');
+  });
+
+  it('ConversationService 应该能够成功更新会话标题', async () => {
+    const conversationService = app.get(ConversationService);
+    const updated = await conversationService.updateTitle(createdConvId, '自动化提炼的新标题');
+    expect(updated.title).toBe('自动化提炼的新标题');
+
+    const inDb = await prisma.conversation.findUnique({ where: { id: createdConvId } });
+    expect(inDb?.title).toBe('自动化提炼的新标题');
   });
 
   it('Bob (User 2) 尝试向 Alice 的会话发送消息应该返回 403 Forbidden', async () => {

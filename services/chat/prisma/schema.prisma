@@ -23,6 +23,29 @@ enum TaskStatus {
   error
 }
 
+// 产物类型枚举
+enum ArtifactType {
+  MARKDOWN
+  CODE
+  DOCUMENT
+  TABLE
+  CHART
+}
+
+// 模型类型枚举
+enum ModelType {
+  general
+  code
+  intent
+  embedding
+}
+
+// 模型可见性枚举
+enum ModelVisibility {
+  public
+  private
+}
+
 // 1. 会话表
 model Conversation {
   id        String    @id @default(cuid())
@@ -32,6 +55,7 @@ model Conversation {
   updatedAt DateTime  @updatedAt
 
   messages  Message[]
+  artifact  Artifact?
 
   @@index([userId])
   @@map("conversations")
@@ -47,6 +71,7 @@ model Message {
   createdAt      DateTime     @default(now())
 
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  artifactVersions ArtifactVersion[]
 
   @@index([conversationId])
   @@map("messages")
@@ -100,4 +125,70 @@ model TaskEvent {
   @@index([userId])
   @@index([taskId])
   @@map("task_events")
+}
+
+// 6. 产物表（一个会话最多一个产物）
+model Artifact {
+  id             String       @id @default(cuid())
+  conversationId String       @unique
+  userId         String       // 关联用户系统 User ID (不建外键约束)
+  title          String
+  type           ArtifactType @default(MARKDOWN)
+  language       String?
+  content        String       @db.Text
+  currentVersion Int          @default(1)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  versions       ArtifactVersion[]
+
+  @@index([userId])
+  @@map("artifacts")
+}
+
+// 7. 产物版本表（每次修改追加一版，可回溯/回滚）
+model ArtifactVersion {
+  id              String   @id @default(cuid())
+  artifactId      String
+  version         Int
+  content         String   @db.Text
+  changelog       String?
+  sourcetags      String[] // AI / HUMAN 等来源标记
+  sourceMessageId String?
+  createdAt       DateTime @default(now())
+
+  artifact        Artifact @relation(fields: [artifactId], references: [id], onDelete: Cascade)
+  sourceMessage   Message? @relation(fields: [sourceMessageId], references: [id])
+
+  @@unique([artifactId, version])
+  @@index([artifactId, createdAt])
+  @@map("artifact_versions")
+}
+
+// 8. 模型配置表（前端模型选择器 + 后台管理）
+model ModelConfig {
+  id           String          @id @default(cuid())
+  name         String          @db.VarChar(100)
+  provider     String          @default("openai") @db.VarChar(50)
+  model        String          @db.VarChar(100)
+  type         ModelType       @default(general)
+  priority     Int             @default(0)
+  baseUrl      String?         @db.VarChar(200)
+  apiKey       String?         @db.VarChar(200)
+  metadata     Json?
+  isActive     Boolean         @default(true)
+  isDefault    Boolean         @default(false)
+  visibility   ModelVisibility @default(public)
+  createdBy    String?         @db.VarChar(50)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  capabilities String[]        @default(["text"])
+
+  @@index([createdBy])
+  @@index([isActive])
+  @@index([isDefault])
+  @@index([type])
+  @@index([visibility])
+  @@map("model_configs")
 }

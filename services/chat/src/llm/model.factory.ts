@@ -18,10 +18,17 @@ export function createChatModel(
     streaming: boolean;
     /** 关闭 Qwen3 深度思考模式，避免与 tool_choice: required 冲突 */
     disableThinking: boolean;
+    /** 覆盖 API Key（优先使用，为空则回退到 process.env） */
+    apiKey: string;
+    /** 覆盖 Base URL（优先使用，为空则回退到 process.env） */
+    baseUrl: string;
   }>,
 ): ChatOpenAI {
   const config = loadLangChainConfig();
   const keys = getApiKeys();
+
+  const apiKey = overrides?.apiKey?.trim() || keys.openaiApiKey;
+  const baseURL = overrides?.baseUrl?.trim() || keys.openaiBaseUrl;
 
   return new ChatOpenAI({
     model: overrides?.modelName ?? config.llm.modelName,
@@ -29,9 +36,9 @@ export function createChatModel(
     maxTokens: overrides?.maxTokens ?? config.llm.maxTokens,
     timeout: config.llm.timeoutMs,
     streaming: overrides?.streaming ?? config.features.streaming,
-    apiKey: keys.openaiApiKey,
+    apiKey,
     configuration: {
-      baseURL: keys.openaiBaseUrl,
+      baseURL,
     },
     // Qwen3 系列在 Thinking Mode 下不支持 tool_choice: required，
     // 需要通过 DashScope 扩展参数显式关闭（直接展开到请求 body）

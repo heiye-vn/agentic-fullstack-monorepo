@@ -80,4 +80,19 @@ export class ConversationService {
 
     return { success: true, message: '会话已删除' };
   }
+
+  /**
+   * 更新指定会话的标题
+   *
+   * @param conversationId 会话 ID
+   * @param title 新的会话标题
+   */
+  async updateTitle(conversationId: string, title: string) {
+    return this.prisma.conversation.update({
+      where: { id: conversationId },
+      data: {
+        title: title.trim(),
+      },
+    });
+  }
 }

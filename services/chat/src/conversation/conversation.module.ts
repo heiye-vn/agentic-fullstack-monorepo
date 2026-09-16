@@ -3,9 +3,10 @@ import { ConversationService } from './conversation.service.js';
 import { ConversationController } from './conversation.controller.js';
 import { MessageModule } from '../message/message.module.js';
 import { AdvancedModule } from '../llm/advanced.module.js';
+import { ModelConfigModule } from '../model-config/model-config.module.js';
 
 @Module({
-  imports: [MessageModule, AdvancedModule],
+  imports: [MessageModule, AdvancedModule, ModelConfigModule],
   controllers: [ConversationController],
   providers: [ConversationService],
   exports: [ConversationService],

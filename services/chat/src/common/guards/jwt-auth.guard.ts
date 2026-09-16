@@ -20,7 +20,7 @@ export class JwtAuthGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
-    const token = this.extractTokenFromHeader(request);
+    const token = this.extractToken(request);
 
     if (!token) {
       throw new UnauthorizedException('缺少认证凭证 (Bearer Token)');
@@ -52,10 +52,34 @@ export class JwtAuthGuard implements CanActivate {
     return true;
   }
 
-  private extractTokenFromHeader(request: Request): string | undefined {
+  /**
+   * 多来源提取 JWT，优先级依次为：
+   *   1. Authorization: Bearer <token>   —— 常规 REST 请求
+   *   2. Cookie: accessToken=<token>     —— 同源场景下的 SSE / 下载链接
+   *   3. Query: ?token=<token>           —— EventSource 无法自定义请求头时的兜底方案
+   *
+   * 之所以需要 2/3：浏览器原生 EventSource API 不支持设置 Authorization 请求头，
+   * 因此 SSE 长连接只能把 token 放在 URL 查询参数里传递。
+   */
+  private extractToken(request: Request): string | undefined {
+    // 1. Authorization: Bearer <token>
     const authHeader = request.headers.authorization;
-    if (!authHeader) return undefined;
-    const [type, token] = authHeader.split(' ');
-    return type === 'Bearer' ? token : undefined;
+    if (authHeader) {
+      const [type, headerToken] = authHeader.split(' ');
+      if (type === 'Bearer' && headerToken) return headerToken;
+    }
+
+    // 2. Cookie: accessToken=<token>
+    const cookie = request.headers.cookie;
+    if (cookie) {
+      const match = /(?:^|;\s*)accessToken=([^;]+)/.exec(cookie);
+      if (match?.[1]) return decodeURIComponent(match[1]);
+    }
+
+    // 3. Query: ?token=<token>（兼容 ?access_token=）
+    const queryToken = request.query?.token ?? request.query?.access_token;
+    if (typeof queryToken === 'string' && queryToken) return queryToken;
+
+    return undefined;
   }
 }
