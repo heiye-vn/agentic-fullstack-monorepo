@@ -37,7 +37,8 @@ export const Navbar: React.FC = () => {
   }, [apiBaseUrl]);
 
   const navItems = [
-    { label: "平台主页", href: "/" },
+    { label: "AI 助手", href: "/" },
+    { label: "课程工作台", href: "/labs" },
     { label: "需求结构化抽取", href: "/extract" },
     { label: "AI 交互工作流", href: "/ui-chat" },
     { label: "UI 组件展厅", href: "/ui-gallery" },
