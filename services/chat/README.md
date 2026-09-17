@@ -1,114 +1,112 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# @autix/chat 微服务
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+基于 **NestJS 12**、**LangGraph (`@langchain/langgraph`)**、**LangChain LCEL** 与 **Prisma 7 (PostgreSQL)** 构建的企业级智能体推理与对话核心微服务。
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+---
 
-## Description
+## 🚀 核心架构与功能
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+### 1. LangGraph 状态图推理闭环 (`src/llm/graph/`)
+- **确定性状态机**：基于 `StateGraph` 与 `StateAnnotation` 契约，管理需求解析、分类、专家分析矩阵、生成草案与 Critic 评分报告。
+- **Critic 审阅与自反思闭环**：通过条件边（Conditional Edge）基于结构化质检评分动态决策——未达阈值且在轮次上限内时触发 `revise` 循环重写，达标后流转至 `END` 交付。
+- **领域专家子图 (Subgraph)**：解耦并独立编排业务领域专家分析器。
 
-## Project setup
+### 2. Artifacts 成果物全生命周期管理 (`src/artifact/`)
+- **版本化数据库建模**：关联持久化 `Artifact` 与 `ArtifactVersion`，支持全量历史版本回溯、查看与对比。
+- **针对性迭代优化**：提供 `OptimizeArtifactDto`，支持针对已有成果物进行局部/全局二次指令润色并派生新版本。
 
-```bash
-$ pnpm install
+### 3. 模型配置管理与凭据安全体系 (`src/model-config/` & `src/common/crypto/`)
+- **落库加密与接口脱敏**：私有模型 API Key 采用 `AES-256-GCM` 算法落库加密（前缀 `enc:v1:` 兼容历史明文）；对外管理接口强制脱敏脱空 (`maskSecrets` / `findByIdSafe`)。
+- **运行时动态凭据解析**：公共公开模型统一走服务端环境变量；私有模型优先安全解密使用。
+- **流式可观测 Meta 回传**：在 SSE `meta` 帧中向前端回传当前轮次实际使用的 `modelName` 与密钥来源 `keySource`。
+
+### 4. RAG 知识库与异步任务流 (`src/document/` & `src/sse/`)
+- **多格式文档解析**：支持 PDF、Word (`.docx`) 及纯文本。
+- **切块与向量检索**：集成递归切块策略与向量相似度检索。
+- **SSE 事件流通知**：长任务状态与进度实时通过 Server-Sent Events 推送。
+
+---
+
+## 📂 模块全景目录
+
+```text
+src/
+├── artifact/              # 成果物与多版本迭代管理模块 (Controller, Service, DTOs)
+├── common/                # 通用安全、异常拦截与工具库
+│   └── crypto/            # AES-256-GCM 凭据加解密工具 (secret-crypto.ts)
+├── config/                # LangChain 与环境配置加载器
+├── conversation/          # 对话管理、UI 动作解析与 SSE 编排流式服务
+├── document/              # 文档解析、切块与向量存储检索
+├── llm/                   # 智能体核心算法与图编排
+│   ├── agents/            # 领域专家 Agent 定义
+│   ├── graph/             # LangGraph 状态图、节点实现、条件边与子图
+│   └── tools/             # 沙箱与计算工具链
+├── message/               # 消息记录与数据库操作
+├── model-config/          # 模型动态配置、凭据解析与脱敏控制器
+├── prisma/                # Prisma ORM 实例与模型类型导出
+└── sse/                   # 异步长任务事件流通道 (TaskSseService)
 ```
 
-## Compile and run the project
+---
 
-```bash
-# development
-$ pnpm run start
+## ⚙️ 环境变量配置
 
-# watch mode
-$ pnpm run start:dev
+在 `services/chat/` 目录下创建 `.env` 文件：
 
-# production mode
-$ pnpm run start:prod
+```env
+# 服务运行端口
+PORT=4001
+
+# 数据库持久化连接
+DATABASE_URL="postgresql://postgres:postgres123@localhost:5432/autix_chat?schema=public"
+
+# 默认大模型调用配置
+MODEL_NAME=gpt-4o-mini
+OPENAI_API_KEY=sk-your-default-openai-key
+OPENAI_BASE_URL=https://api.openai.com/v1
+
+# JWT 统一鉴权密钥 (需与 user-system 保持一致)
+JWT_SECRET="autix_rbac_jwt_secret_key_2026_super_secure"
+
+# 模型配置密钥的落库加密密钥 (AES-256-GCM，建议 32 位强随机串)
+# 未设置时回退使用 JWT_SECRET
+MODEL_CONFIG_SECRET="your-32byte-secret-key-for-model-config"
 ```
 
-## Run tests
+---
+
+## 🛠️ 常用开发与测试指令
 
 ```bash
-# unit tests
-$ pnpm run test
+# 启动本地开发服务 (支持代码热重载)
+pnpm run dev
 
-# e2e tests
-$ pnpm run test:e2e
+# 执行 TypeScript 静态类型检查
+pnpm run typecheck
 
-# test coverage
-$ pnpm run test:cov
+# 代码规范检查
+pnpm run lint
+
+# 执行单元测试
+pnpm run test
+
+# ----------------- LangGraph 智能体状态图测试 -----------------
+# 运行端到端完整状态图推理
+pnpm run test:graph
+
+# 运行专家子图 (Subgraph) 独立测试
+pnpm run test:subgraph
+
+# 运行 Critic 质检评审与反思循环测试
+pnpm run test:critic
+
+# 终端输出 StateGraph 的 Mermaid 流程图源码
+pnpm run graph:mermaid
+
+# ----------------- 数据库管理 (Prisma) -----------------
+# 同步 Prisma Schema 到数据库
+pnpm run db:push
+
+# 启动 Prisma Studio 可视化数据后台
+pnpm run db:studio
 ```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Observability
-
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
-
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
-
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observer](https://observer.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).

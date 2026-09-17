@@ -13,6 +13,9 @@
 - **Chapter 03: 基于 LangChain 的需求分析提取平台** (`chapter-03-first-chain`)：构建基于 LangChain Expression Language (LCEL) 的提示词管道、流式 SSE 响应、Zod 结构化抽取、自动工具循环（Tool Loop），并提供 Linear 曜石黑风格的交互工作界面。
 - **Chapter 04: 智能体记忆与多 Agent 协同编排** (`chapter-04-agent-memory-tools`)：引入 Runnable 会话记忆、安全文件沙箱工具链，构建主编排器与领域子智能体协同工作流，实现复杂需求自动化拆解与分析。
 - **Chapter 05: 数据库持久化、RAG 向量检索与任务流通知** (`chapter-05-db-vector`)：Chat 服务集成 Prisma ORM 持久化会话与历史消息，实现多格式文档解析、智能切块、向量相似度检索（RAG），以及基于 SSE 的异步长任务事件流推送。
+- **Chapter 06: 让 AI 做更懂你的交互—AI 结构化 UI 响应协议与工作台** (`chapter-06-ai-ui`)：打造基于 Zod 判别联合的 8 大原子 UI 组件契约、确定性交互状态机（UIFlowService）与全功能沉浸式三栏工作台（Workbench）。
+- **Chapter 07: Agent 推理的三层决策机制—路由、执行与优化**：确立智能体复杂决策体系，解耦路由层（Router）、执行层（Executor）与优化层（Optimizer）。
+- **Chapter 08: LangGraph 单 Agent 图实战—路由、循环与质量闭环** (`chapter-08-langgraph`)：引入 `@langchain/langgraph` 状态图（StateGraph），构建专家分析与 Critic 审查自循环质量闭环、Artifact 成果物版本化演进管理，以及私有模型 API Key 的 AES-256-GCM 落库加密与调用全链路可观测。
 
 ---
 
@@ -21,14 +24,15 @@
 ```text
 .
 ├── clients/
-│   ├── chat-web/             # [Next.js 16] 需求分析提取前端界面 (端口 3002)
+│   ├── chat-web/             # [Next.js 16] 智能工作台与成果物交互界面 (端口 3002)
 │   └── admin-web/            # [Next.js 16 + HeroUI] RBAC 权限管理控制中心 (端口 3100)
 ├── services/
-│   ├── chat/                 # [NestJS] LangChain 需求分析与调用链后端服务 (端口 4001)
+│   ├── chat/                 # [NestJS + LangGraph] 智能体图推理、Artifact 管理与调用链服务 (端口 4001)
 │   └── user-system/          # [NestJS + Prisma] 认证鉴权与用户权限微服务 (端口 4002)
 ├── packages/
 │   └── contracts/            # TypeScript 共享数据类型契约与 Zod Schema
 ├── docs/
+│   ├── tutorials/            # 📚 配套实战教程知识库 (全 11 章节与分支映射)
 │   └── apifox/               # Apifox 接口测试导出集合 (按章节归档)
 ├── infra/
 │   └── compose/              # Dockerfile 镜像构建与 Docker Compose 容器编排
@@ -49,8 +53,10 @@
 - **Monorepo 管理**：`pnpm workspaces` + `Turborepo` 统一驱动任务拓扑构建与依赖硬链接
 - **前端工程**：Next.js 16 (Turbopack, App Router)、React 19、Tailwind CSS、HeroUI、Lucide Icons
 - **后端框架**：NestJS 12 (TypeScript, Express 适配器, Module / Controller / Service 分层)
-- **AI 与大模型生态**：`@langchain/core`、`@langchain/openai`、`zod` (LCEL 管道、结构化输出、Tool Loop)
+- **智能体与图编排**：`@langchain/langgraph` (StateGraph 状态图、条件边、循环反思与子图编排)
+- **大模型生态**：`@langchain/core`、`@langchain/openai`、`zod` (LCEL 管道、结构化输出、Tool Loop)
 - **数据持久层**：PostgreSQL 16、Prisma ORM (Schema 迁移、种子填充、类型生成)
+- **安全与加密**：Node.js Crypto (AES-256-GCM 模型凭据落库加密)、JWT 双 Token 轮转鉴权
 - **共享契约模式**：`@autix/contracts` 标准 CommonJS / TypeScript 输出，保证前后端零沟通成本契约对齐
 - **容器化与运维**：Docker & Docker Compose、Alpine 极简镜像分阶段构建
 
@@ -80,13 +86,28 @@ pnpm install
   OPENAI_API_KEY=sk-your-key
   OPENAI_BASE_URL=https://api.openai.com/v1
   PORT=4001
+  DATABASE_URL="postgresql://postgres:postgres123@localhost:5432/autix_chat?schema=public"
+  JWT_SECRET="autix_rbac_jwt_secret_key_2026_super_secure"
+  # 可选：私有模型 API Key 的 AES-256-GCM 落库加密密钥（未配时回退使用 JWT_SECRET）
+  MODEL_CONFIG_SECRET="your-32byte-secret-key-for-model-config"
   ```
 - **`services/user-system/.env`**：
   ```env
-  DATABASE_URL="postgresql://postgres:postgres@localhost:5432/autix_db?schema=public"
-  JWT_SECRET="your-super-secret-jwt-key"
-  JWT_REFRESH_SECRET="your-super-secret-refresh-key"
+  DATABASE_URL="postgresql://postgres:postgres123@localhost:5432/autix_db?schema=public"
+  JWT_SECRET="autix_rbac_jwt_secret_key_2026_super_secure"
+  JWT_REFRESH_SECRET="autix_rbac_jwt_refresh_secret_key_2026_super_secure"
   PORT=4002
+  ```
+- **`clients/chat-web/.env.local`**：
+  ```env
+  NEXT_PUBLIC_CHAT_API_URL=http://localhost:4001
+  NEXT_PUBLIC_USER_API_URL=http://localhost:4002/api/v1
+  PORT=3002
+  ```
+- **`clients/admin-web/.env.local`**：
+  ```env
+  NEXT_PUBLIC_USER_API_URL=http://localhost:4002/api/v1
+  PORT=3100
   ```
 
 ---
@@ -128,6 +149,55 @@ pnpm run build
 # 全工作区执行 TypeScript 静态类型检查
 pnpm run typecheck
 ```
+
+### 智能体状态图与脚本测试 (Chat 微服务)
+
+```bash
+# 执行 LangGraph 状态图完整端到端推理测试
+pnpm --filter @autix/chat test:graph
+
+# 执行领域专家子图 (Subgraph) 独立编排测试
+pnpm --filter @autix/chat test:subgraph
+
+# 执行 Critic 质检评审与反思循环测试
+pnpm --filter @autix/chat test:critic
+
+# 打印编译后 StateGraph 的 Mermaid 流程架构图
+pnpm --filter @autix/chat graph:mermaid
+```
+
+---
+
+## 🔄 Chapter 08: LangGraph 单 Agent 图实战—路由、循环与质量闭环
+
+> **对应分支**：`chapter-08-langgraph`
+
+在第八阶段，系统全面迁移至 **LangGraph (`@langchain/langgraph`)** 状态图体系，彻底告别单一线性执行链（LCEL），构建了具备**分支路由、多轮反思、质检闭环、成果物演进与安全凭据体系**的工业级生产智能体：
+
+### 1. 核心架构与特性
+
+- **基于 StateGraph 的确定性状态图流转**：
+  - 定义强类型状态契约（`StateAnnotation`）：精准捕获用户输入、领域分类、专家分析矩阵、生成草案、Critic 评审报告与迭代次数。
+  - **条件动态边（Conditional Edges）**：根据 Critic 节点的结构化评分（阈值控制）与最大反思轮次限制，动态决定继续进入 `revise` 反思循环，或流转至 `END` 正式交付成果。
+  - **专家子图编排（Subgraph）**：将复杂业务域分析器解耦为独立子图，实现图节点的模块化复用与单独评测。
+- **Claude 级 Artifacts 成果物全生命周期管理**：
+  - **版本化数据库建模**：设计 `Artifact` 与 `ArtifactVersion` 关联模型，记录每次修改的变更说明、完整内容与版本流水。
+  - **局部优化与迭代引擎**：提供 `OptimizeArtifactDto`，用户可在侧边面板直接针对选中成果物提出修改指令，智能体基于已有成果完成针对性增量修改与新版本沉淀。
+  - **前端双栏沉浸式预览**：支持 Markdown、流程图表渲染、版本历史回溯与一键复制导出。
+- **企业级私有模型凭据安全与全链路可观测**：
+  - **落库加密与接口脱敏**：采用 `AES-256-GCM` 算法对私有模型 `apiKey` 落库加密（前缀 `enc:v1:` 兼容历史明文），对外管理 API 全面实施 `maskSecrets` 字段脱敏，杜绝凭据外泄。
+  - **双层凭据解析策略**：公共公开模型统一走服务端环境变量（防止恶意注入），私有模型优先解密使用数据库配置。
+  - **流式可观测 Meta 回传**：SSE 传输链路在元数据帧（`meta`）中精准回传本次推理实际生效的 `modelName` 与 `keySource`（`db` / `env` / `default` / `none`），并在前端顶部工作区实时可视化呈现。
+
+---
+
+## 🧭 Chapter 07: Agent 推理的三层决策机制—路由、执行与优化
+
+在第七阶段，系统提炼并确立了企业级智能体推理的核心设计范式：
+
+- **路由层（Router）**：混合式意图分发——结合预置状态机规则与轻量分类模型，将模糊的用户诉求精准导向最匹配的专业知识库与处理流。
+- **执行层（Executor）**：领域专家 Agent 协同——挂载结构化 Prompt 契约与沙箱工具，自主生成严谨的需求规格文档。
+- **优化层（Optimizer）**：独立 Critic 评审与反思——采用“角色对立”机制进行自我批判，指出遗漏缺陷并给出量化评审依据，保障交付质量。
 
 ---
 
