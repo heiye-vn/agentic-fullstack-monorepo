@@ -57,7 +57,7 @@ export const AIChatContainer: React.FC = () => {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const apiBaseUrl =
-    process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4001";
+    process.env.NEXT_PUBLIC_CHAT_API_URL || "http://localhost:4001";
 
   // 客户端挂载后初始化会话 ID
   useEffect(() => {

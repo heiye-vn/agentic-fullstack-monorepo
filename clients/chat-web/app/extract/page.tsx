@@ -30,7 +30,7 @@ export default function ExtractPage() {
   const [copied, setCopied] = useState(false);
 
   const apiBaseUrl =
-    process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4001";
+    process.env.NEXT_PUBLIC_CHAT_API_URL || "http://localhost:4001";
 
   const handleSubmit = async () => {
     const trimmedInput = input.trim();

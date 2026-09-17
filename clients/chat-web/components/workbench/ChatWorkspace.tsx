@@ -97,7 +97,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const apiBaseUrl =
-    process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4001";
+    process.env.NEXT_PUBLIC_CHAT_API_URL || "http://localhost:4001";
 
   // 组件卸载时中止活跃流式请求
   useEffect(() => {

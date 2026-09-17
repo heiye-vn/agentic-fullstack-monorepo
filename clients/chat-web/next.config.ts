@@ -8,8 +8,7 @@ const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: path.join(__dirname, "../../"),
   env: {
-    NEXT_PUBLIC_API_BASE_URL:
-      process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4001",
+    NEXT_PUBLIC_CHAT_API_URL: CHAT_API,
   },
   // AI 助手 SSE 代理（来自 autix-demo chat-web）
   rewrites: async () => [
