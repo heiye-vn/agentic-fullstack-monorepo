@@ -212,6 +212,11 @@ export function ChatView({ sessionId }: ChatViewProps) {
   const abortRef = useRef<AbortController | null>(null);
   const [lastAssistantUIResponse, setLastAssistantUIResponse] = useState<any>(null);
   const [isWaitingFirstResponse, setIsWaitingFirstResponse] = useState(false);
+  // 可观测：后端 meta 帧回传的本轮实际模型与密钥来源
+  const [activeModel, setActiveModel] = useState<{
+    modelName: string | null;
+    keySource: string | null;
+  }>({ modelName: null, keySource: null });
 
   const activeSession = getActiveSession();
 
@@ -421,6 +426,12 @@ export function ChatView({ sessionId }: ChatViewProps) {
                   }
                   if (metaPayload?.conversationTitle && activeSessionId) {
                     updateSessionTitle(activeSessionId, metaPayload.conversationTitle);
+                  }
+                  if (metaPayload?.modelName !== undefined || metaPayload?.keySource) {
+                    setActiveModel({
+                      modelName: metaPayload.modelName ?? null,
+                      keySource: metaPayload.keySource ?? null,
+                    });
                   }
                   break;
 
@@ -643,6 +654,12 @@ export function ChatView({ sessionId }: ChatViewProps) {
                   if (metaPayload?.conversationTitle && activeSessionId) {
                     updateSessionTitle(activeSessionId, metaPayload.conversationTitle);
                   }
+                  if (metaPayload?.modelName !== undefined || metaPayload?.keySource) {
+                    setActiveModel({
+                      modelName: metaPayload.modelName ?? null,
+                      keySource: metaPayload.keySource ?? null,
+                    });
+                  }
                   break;
 
                 case 'progress':
@@ -784,12 +801,26 @@ export function ChatView({ sessionId }: ChatViewProps) {
         style={{ borderBottom: '1px solid var(--border)' }}
       >
         <div className="mx-auto flex w-full min-w-0 max-w-3xl items-center justify-between px-6">
-          <p
-            className="text-[11px] font-medium uppercase tracking-[0.14em]"
-            style={{ color: 'var(--muted)' }}
-          >
-            Chat workspace
-          </p>
+          <div className="flex min-w-0 items-baseline gap-2">
+            <p
+              className="text-[11px] font-medium uppercase tracking-[0.14em] flex-shrink-0"
+              style={{ color: 'var(--muted)' }}
+            >
+              Chat workspace
+            </p>
+            {activeModel.modelName && (
+              <span
+                className="truncate text-[11px]"
+                style={{ color: 'var(--muted)' }}
+                title={`实际生效模型：${activeModel.modelName}（密钥来源：${activeModel.keySource}）`}
+              >
+                · {activeModel.modelName}
+                {activeModel.keySource && (
+                  <span className="ml-1 opacity-70">[{activeModel.keySource}]</span>
+                )}
+              </span>
+            )}
+          </div>
           <ModelSelector />
         </div>
       </header>

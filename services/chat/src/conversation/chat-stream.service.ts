@@ -209,6 +209,10 @@ export class ChatStreamService {
         uiStage: result.context?.sessionStage ?? uiContext.uiStage ?? null,
         usedAgents: [],
         retrievedDocuments: [],
+        // UI 操作走的是确定性状态机（UIFlowService），不发起任何模型调用，
+        // 因此这里如实标注为 none —— 不要让人误以为它会消耗 token 或受模型选择影响。
+        modelName: null,
+        keySource: 'none',
       },
     };
     yield { messageType: 'done', payload: null };
@@ -275,7 +279,8 @@ export class ChatStreamService {
       );
     }
 
-    const model = await this.resolveChatModel(modelId);
+    const { model, modelName, keySource } =
+      await this.resolveChatModel(modelId);
 
     // ── 编排管道流式输出 ────────────────────────────────────────
     let content = '';
@@ -448,7 +453,14 @@ export class ChatStreamService {
 
     yield {
       messageType: 'meta',
-      payload: { usedAgents, retrievedDocuments, conversationTitle },
+      payload: {
+        usedAgents,
+        retrievedDocuments,
+        conversationTitle,
+        // 可观测：本轮到底用了哪个模型、哪把钥匙
+        modelName,
+        keySource,
+      },
     };
     yield { messageType: 'done', payload: null };
   }
@@ -581,22 +593,57 @@ export class ChatStreamService {
   }
 
   /**
-   * 解析本次对话使用的模型
-   * 密钥与 baseUrl 始终只从 process.env 读，不信任库里的明文 apiKey
+   * 解析本次对话使用的模型，并把「实际用了什么」一并返回，供 meta 帧回传前端。
+   *
+   * 凭据策略（方案 C）：
+   * - 未传 modelId / 模型不存在 → YAML 默认模型，密钥走 process.env
+   * - private 模型且库里配了密钥 → 解密后使用（keySource: 'db'）
+   * - public 模型或库里没配密钥 → 一律回退 process.env（keySource: 'env'）
    */
-  private async resolveChatModel(modelId?: string) {
-    if (!modelId) return createChatModel({ streaming: true });
+  private async resolveChatModel(modelId?: string): Promise<{
+    model: ReturnType<typeof createChatModel>;
+    modelName: string;
+    keySource: 'db' | 'env' | 'default';
+  }> {
+    const fallbackName = loadLangChainConfig().llm.modelName;
+
+    if (!modelId) {
+      return {
+        model: createChatModel({ streaming: true }),
+        modelName: fallbackName,
+        keySource: 'default',
+      };
+    }
 
     try {
-      const config = await this.modelConfigService.findById(modelId);
-      return createChatModel({ modelName: config.model, streaming: true });
+      const creds =
+        await this.modelConfigService.resolveRuntimeCredentials(modelId);
+
+      const model = createChatModel({
+        modelName: creds.modelName,
+        apiKey: creds.apiKey,
+        baseUrl: creds.baseUrl,
+        streaming: true,
+      });
+
+      this.logger.log(
+        `[chat stream] 使用模型 ${creds.modelName}，密钥来源: ${creds.keySource}`,
+      );
+
+      return {
+        model,
+        modelName: creds.modelName,
+        keySource: creds.keySource,
+      };
     } catch (err) {
       this.logger.warn(
-        `模型配置 ${modelId} 不存在，回退到默认模型：${
-          err instanceof Error ? err.message : String(err)
-        }`,
+        `模型配置 ${modelId} 不可用，回退到默认模型：${err instanceof Error ? err.message : String(err)}`,
       );
-      return createChatModel({ streaming: true });
+      return {
+        model: createChatModel({ streaming: true }),
+        modelName: fallbackName,
+        keySource: 'default',
+      };
     }
   }
 }

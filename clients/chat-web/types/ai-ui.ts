@@ -282,6 +282,10 @@ export interface MetaPayload {
     score: number;
   }>;
   conversationTitle?: string;
+  /** 本轮实际使用的模型标识（可观测用） */
+  modelName?: string | null;
+  /** 密钥来源：db=库里配的私有密钥 / env=服务端环境变量 / default=YAML 默认 / none=本轮未调模型 */
+  keySource?: 'db' | 'env' | 'default' | 'none';
 }
 
 /** 错误载荷 */
