@@ -61,6 +61,36 @@ export const WorkbenchLayout: React.FC = () => {
     }
   }, []);
 
+  // 返回首页：回到对话视图，并重置为一个全新的空白会话
+  const handleGoHome = useCallback(() => {
+    const newId = `session-${Date.now()}`;
+    const newSession: SessionItem = {
+      id: newId,
+      title: "新对话",
+      modelId: currentModel?.id || "model-gpt-5-4",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    const nextSessions = [newSession, ...sessions];
+    setSessions(nextSessions);
+    saveStoredSessions(nextSessions);
+    setActiveSessionIdState(newId);
+    setActiveSessionId(newId);
+    setActiveView("chat");
+  }, [currentModel, sessions]);
+
+  // 快捷键：Ctrl/Cmd + Shift + O 返回首页
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "O" || e.key === "o")) {
+        e.preventDefault();
+        handleGoHome();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleGoHome]);
+
   // 新建会话
   const handleNewSession = useCallback(() => {
     const newId = `session-${Date.now()}`;
@@ -196,6 +226,7 @@ export const WorkbenchLayout: React.FC = () => {
         activeSessionId={activeSessionId}
         onSelectSession={handleSelectSession}
         onNewSession={handleNewSession}
+        onGoHome={handleGoHome}
         onDeleteSession={handleDeleteSession}
         modelCount={models.length}
       />

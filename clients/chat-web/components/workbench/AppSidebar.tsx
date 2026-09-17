@@ -11,6 +11,8 @@ interface AppSidebarProps {
   activeSessionId: string | null;
   onSelectSession: (id: string) => void;
   onNewSession: () => void;
+  /** 返回首页：回到对话视图并开启一个空白新会话 */
+  onGoHome: () => void;
   onDeleteSession: (id: string) => void;
   modelCount: number;
 }
@@ -22,11 +24,14 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
   activeSessionId,
   onSelectSession,
   onNewSession,
+  onGoHome,
   onDeleteSession,
   modelCount,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
+
+  const isHome = activeView === "chat";
 
   const filteredSessions = sessions.filter((s) =>
     s.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -34,18 +39,43 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
 
   return (
     <aside className="w-64 shrink-0 bg-[#000000] border-r border-neutral-800/80 flex flex-col h-full select-none text-neutral-300">
-      {/* 顶部品牌 */}
-      <div className="h-14 px-4 flex items-center gap-2.5 border-b border-neutral-900">
+      {/* 顶部品牌（点击返回首页） */}
+      <button
+        type="button"
+        onClick={onGoHome}
+        title="返回首页"
+        aria-label="返回首页"
+        className="h-14 px-4 flex items-center gap-2.5 border-b border-neutral-900 w-full text-left cursor-pointer hover:bg-neutral-900/50 transition"
+      >
         <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center text-white shadow-[0_0_12px_rgba(99,102,241,0.35)]">
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
         </div>
         <span className="font-semibold text-white tracking-tight text-sm">Autix AI</span>
-      </div>
+        {isHome && (
+          <span className="ml-auto text-[10px] text-neutral-500 font-mono px-1.5 py-0.5 rounded-full bg-neutral-900 border border-neutral-800">
+            首页
+          </span>
+        )}
+      </button>
 
       {/* 顶部新建按钮与主菜单 */}
       <div className="p-3 space-y-2">
+        {/* 返回首页按钮 */}
+        <button
+          type="button"
+          onClick={onGoHome}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-neutral-900/90 hover:bg-neutral-800 text-neutral-200 hover:text-white text-xs font-medium border border-neutral-800 hover:border-neutral-700 transition cursor-pointer shadow-sm group"
+        >
+          <svg className="w-3.5 h-3.5 text-neutral-400 group-hover:text-white transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10.5L12 3l9 7.5" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 9.5V20a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1V9.5" />
+          </svg>
+          <span>返回首页</span>
+          <span className="ml-auto text-[10px] text-neutral-600 font-mono">⌘⇧O</span>
+        </button>
+
         {/* 新建会话按钮 */}
         <button
           type="button"
@@ -99,6 +129,20 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
               </span>
             )}
           </button>
+
+          {/* 从模型配置/资料库一键回到对话首页 */}
+          {!isHome && (
+            <button
+              type="button"
+              onClick={onGoHome}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-neutral-400 hover:text-white hover:bg-neutral-900/60 transition cursor-pointer"
+            >
+              <svg className="w-4 h-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 17l-5-5m0 0l5-5m-5 5h12" />
+              </svg>
+              <span>返回对话</span>
+            </button>
+          )}
         </div>
       </div>
 
