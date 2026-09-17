@@ -61,7 +61,7 @@ export class ModelConfigController {
    */
   @Get(':id')
   async findOne(@Param('id') id: string) {
-    return this.modelConfigService.findById(id);
+    return this.modelConfigService.findByIdSafe(id);
   }
 
   /**

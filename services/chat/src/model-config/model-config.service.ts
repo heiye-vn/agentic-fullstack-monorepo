@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { Prisma, ModelType, ModelVisibility } from '../prisma/index.js';
 import type { ModelConfig } from '../prisma/index.js';
@@ -6,6 +6,38 @@ import type {
   CreateModelConfigDto,
   UpdateModelConfigDto,
 } from './dto/index.js';
+import { encryptSecret, decryptSecret } from '../common/crypto/secret-crypto.js';
+
+/**
+ * 运行时凭据解析结果
+ * keySource 用于前端展示 / 排障：本次调用到底用的哪把钥匙
+ */
+/**
+ * 对外返回时抹掉真实密钥，只保留「是否已配置」。
+ *
+ * 必须做这件事的原因：库里可能存在升级加密之前写入的**明文** apiKey，
+ * 而 findAll / findById 会把整行原样吐给管理接口 —— 等于密钥直接泄露。
+ * 新的写入虽然是密文，但一旦 MODEL_CONFIG_SECRET 泄漏，密文同样可读，
+ * 所以对外一律不返回真值。
+ */
+function maskSecrets<T extends { apiKey?: string | null }>(
+  config: T,
+): T & { apiKey: string | null; hasApiKey: boolean } {
+  return {
+    ...config,
+    apiKey: config.apiKey ? '***' : null,
+    hasApiKey: !!config.apiKey,
+  };
+}
+
+export interface RuntimeCredentials {
+  modelName: string;
+  /** 解密后的密钥；为空表示走 process.env 兜底 */
+  apiKey?: string;
+  /** 覆盖用的服务地址；为空表示走 process.env 兜底 */
+  baseUrl?: string;
+  keySource: 'db' | 'env';
+}
 
 /**
  * 模型选择器返回的精简字段（不含 apiKey / baseUrl 等敏感配置）
@@ -33,10 +65,13 @@ export type AvailableModelItem = Pick<
  * 设计要点：
  * - 私人模型（createdBy = userId）优先于公开模型（visibility = public）
  * - 同一 type 下只有一个 isDefault，创建/更新时会把旧的默认取消掉
- * - apiKey 允许留在库里作为明文兜底，但业务层优先走 process.env（见 getApiKeys）
+ * - apiKey 一律加密后入库（见 secret-crypto）；读取时只有 private 模型
+ *   才会解密并使用，public 模型永远走 process.env（见 resolveRuntimeCredentials）
  */
 @Injectable()
 export class ModelConfigService {
+  private readonly logger = new Logger(ModelConfigService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   /**
@@ -46,6 +81,37 @@ export class ModelConfigService {
     const config = await this.prisma.modelConfig.findUnique({ where: { id } });
     if (!config) throw new NotFoundException(`模型配置不存在: ${id}`);
     return config;
+  }
+
+  /**
+   * 解析本次调用真正使用的模型与凭据。
+   *
+   * 策略（方案 C）：
+   * - public 模型：忽略库里的 apiKey，一律走 process.env —— 防止任何人
+   *   通过「公开模型」把自己的密钥注入到服务端调用链里。
+   * - private 模型：库里填了 apiKey 才解密使用；没填则同样回退 env。
+   *
+   * @throws 模型不存在时向上抛，由调用方决定回退策略
+   */
+  async resolveRuntimeCredentials(id: string): Promise<RuntimeCredentials> {
+    const config = await this.findById(id);
+
+    const isPrivate = config.visibility === ModelVisibility.private;
+    const apiKey = isPrivate ? decryptSecret(config.apiKey) : '';
+    const baseUrl = isPrivate ? (config.baseUrl ?? '') : '';
+
+    if (!isPrivate && config.apiKey) {
+      this.logger.debug(
+        `公开模型 [${config.name}] 库内配了 apiKey，已按策略忽略，改用 process.env`,
+      );
+    }
+
+    return {
+      modelName: config.model,
+      apiKey: apiKey || undefined,
+      baseUrl: baseUrl || undefined,
+      keySource: apiKey ? 'db' : 'env',
+    };
   }
 
   /**
@@ -172,7 +238,7 @@ export class ModelConfigService {
         type: dto.type ?? ModelType.general,
         priority: dto.priority ?? 0,
         baseUrl: dto.baseUrl,
-        apiKey: dto.apiKey,
+        apiKey: dto.apiKey ? encryptSecret(dto.apiKey) : undefined,
         metadata: dto.metadata
           ? (dto.metadata as Prisma.InputJsonValue)
           : undefined,
@@ -211,7 +277,9 @@ export class ModelConfigService {
         ...(dto.type !== undefined && { type: dto.type }),
         ...(dto.priority !== undefined && { priority: dto.priority }),
         ...(dto.baseUrl !== undefined && { baseUrl: dto.baseUrl }),
-        ...(dto.apiKey !== undefined && { apiKey: dto.apiKey }),
+        ...(dto.apiKey !== undefined && {
+          apiKey: dto.apiKey ? encryptSecret(dto.apiKey) : null,
+        }),
         ...(dto.metadata !== undefined && {
           metadata: dto.metadata as Prisma.InputJsonValue,
         }),
@@ -234,10 +302,21 @@ export class ModelConfigService {
 
   /**
    * 获取所有模型配置（管理后台用）
+   * 注意：apiKey 已脱敏，只返回 hasApiKey 标记
    */
-  async findAll(): Promise<ModelConfig[]> {
-    return this.prisma.modelConfig.findMany({
+  async findAll(): Promise<
+    (ModelConfig & { apiKey: string | null; hasApiKey: boolean })[]
+  > {
+    const list = await this.prisma.modelConfig.findMany({
       orderBy: [{ type: 'asc' }, { priority: 'desc' }],
     });
+    return list.map(maskSecrets);
+  }
+
+  /**
+   * 按 ID 获取单个模型配置（管理后台用，apiKey 已脱敏）
+   */
+  async findByIdSafe(id: string) {
+    return maskSecrets(await this.findById(id));
   }
 }
