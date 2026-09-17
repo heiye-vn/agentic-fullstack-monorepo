@@ -1,5 +1,5 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
-import { clearAuth } from '@/lib/auth';
+import { clearAuth, notifyAuthChanged } from '@/lib/auth';
 
 const USER_API = process.env.NEXT_PUBLIC_USER_API_URL || 'http://localhost:4002/api/v1';
 const CHAT_API = process.env.NEXT_PUBLIC_CHAT_API_URL || 'http://localhost:4001';
@@ -47,6 +47,8 @@ async function doRefresh(): Promise<void> {
     if (tokens.refreshToken) {
       localStorage.setItem('refreshToken', tokens.refreshToken);
     }
+    // 广播变更，让 SSE 等长连接感知到新 token 并重建
+    notifyAuthChanged();
   } catch (err) {
     // 刷新失败要向上抛：否则调用方会误以为刷新成功、拿旧 token 再重放一次请求
     clearAuth();
