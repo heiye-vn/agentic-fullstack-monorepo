@@ -192,3 +192,34 @@ model ModelConfig {
   @@index([visibility])
   @@map("model_configs")
 }
+
+// 9. Token 消耗与成本明细表（节点级）
+model TokenUsage {
+  id                String   @id @default(cuid())
+  conversationId    String?  @db.VarChar(255)
+  messageId         String?  @db.VarChar(255)
+  threadId          String?  @db.VarChar(255)
+  graphName         String   @db.VarChar(100)
+  nodeName          String   @db.VarChar(100)
+  agentName         String   @db.VarChar(100)
+  modelConfigId     String?  @db.VarChar(255)
+  modelName         String   @db.VarChar(100)
+  provider          String   @default("openai") @db.VarChar(50)
+  inputTokens       Int      @default(0)
+  outputTokens      Int      @default(0)
+  totalTokens       Int      @default(0)
+  cachedInputTokens Int      @default(0)
+  estimatedCostUsd  Float    @default(0)
+  isEstimated       Boolean  @default(false)
+  latencyMs         Int      @default(0)
+  overrideReason    String?
+  createdAt         DateTime @default(now())
+
+  @@index([conversationId])
+  @@index([graphName, nodeName])
+  @@index([agentName])
+  @@index([modelConfigId])
+  @@index([createdAt])
+  @@map("token_usages")
+}
+

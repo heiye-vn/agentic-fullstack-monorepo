@@ -23,6 +23,7 @@
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
+    "db:seed-demo": "npx tsx scripts/setup-demo-db.ts",
     "db:studio": "prisma studio"
   },
   "dependencies": {
