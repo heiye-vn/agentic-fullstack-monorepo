@@ -12,6 +12,7 @@ import type { UIAction } from '../llm/ui-protocol/ui-types.js';
 import { SearchService } from '../document/search.service.js';
 import { ArtifactService } from '../artifact/artifact.service.js';
 import { UIActionParser, type UIContext } from './ui-action.parser.js';
+import { estimateTextTokens, getModelPricing } from '../llm/cost/token-estimator.js';
 
 /**
  * SSE 帧类型（对齐 autix-demo chat-web 的 StreamMessage 协议）
@@ -213,6 +214,14 @@ export class ChatStreamService {
         // 因此这里如实标注为 none —— 不要让人误以为它会消耗 token 或受模型选择影响。
         modelName: null,
         keySource: 'none',
+        tokenUsage: {
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+          estimatedCostUsd: 0,
+          isEstimated: false,
+        },
+        overrideReason: null,
       },
     };
     yield { messageType: 'done', payload: null };
@@ -451,6 +460,16 @@ export class ChatStreamService {
       );
     }
 
+    // 计算本轮 Token 消耗估算（输入包括用户 prompt 与 RAG 检索上下文）
+    const inputText = [text, retrievedContext !== '无相关参考文档' ? retrievedContext : ''].filter(Boolean).join('\n');
+    const inputTokens = estimateTextTokens(inputText);
+    const outputTokens = estimateTextTokens(content);
+    const totalTokens = inputTokens + outputTokens;
+    const pricing = getModelPricing(modelName);
+    const estimatedCostUsd =
+      (inputTokens / 1_000_000) * pricing.input +
+      (outputTokens / 1_000_000) * pricing.output;
+
     yield {
       messageType: 'meta',
       payload: {
@@ -460,6 +479,14 @@ export class ChatStreamService {
         // 可观测：本轮到底用了哪个模型、哪把钥匙
         modelName,
         keySource,
+        tokenUsage: {
+          inputTokens,
+          outputTokens,
+          totalTokens,
+          estimatedCostUsd,
+          isEstimated: true,
+        },
+        overrideReason: null,
       },
     };
     yield { messageType: 'done', payload: null };

@@ -1,21 +1,25 @@
 # Autix Monorepo
 
-基于 **pnpm workspaces** + **Turborepo** 构建的企业级全栈多包架构（Monorepo）项目，集成了 **Next.js 16 (App Router)** 现代化前端工作台、**NestJS** 微服务集群、**Prisma + PostgreSQL** 数据持久层、**LangChain LCEL** 大模型调用链，以及 **TypeScript 共享类型契约** 和 **Docker Compose** 容器化编排。
+基于 **pnpm workspaces** + **Turborepo** 构建的企业级全栈多包架构（Monorepo）智能体系统。集成了 **Next.js 16 (App Router)** 现代化工作台、**NestJS** 微服务集群、**LangGraph** 状态图编排、**Token 成本治理**、**Prisma + PostgreSQL** 向量数据持久层，以及 **TypeScript 跨端共享类型契约** 与 **Docker Compose** 容器化编排。
 
 ---
 
-## 🎯 项目背景与阶段规划
+## 🌟 核心业务架构与特性
 
-本项目用于 **AI Agent（人工智能体）全栈落地开发实践与技术探索**，采用分阶段渐进式演进路线：
-
-- **Chapter 01: 全栈工程化底座** (`chapter-01-monorepo-setup`)：搭建基于 pnpm + Turborepo 的多包工作区，实现类型契约跨端共享、独立 Dockerfile 打包与本地容器热更新。
-- **Chapter 02: 企业级 RBAC 权限管控系统** (`chapter-02-user-system`)：基于 PostgreSQL + Prisma 落地双 Token 轮转鉴权、细粒度权限守卫、用户与组织树管理、操作审计及 Next.js 16 Proxy 管理中台。
-- **Chapter 03: 基于 LangChain 的需求分析提取平台** (`chapter-03-first-chain`)：构建基于 LangChain Expression Language (LCEL) 的提示词管道、流式 SSE 响应、Zod 结构化抽取、自动工具循环（Tool Loop），并提供 Linear 曜石黑风格的交互工作界面。
-- **Chapter 04: 智能体记忆与多 Agent 协同编排** (`chapter-04-agent-memory-tools`)：引入 Runnable 会话记忆、安全文件沙箱工具链，构建主编排器与领域子智能体协同工作流，实现复杂需求自动化拆解与分析。
-- **Chapter 05: 数据库持久化、RAG 向量检索与任务流通知** (`chapter-05-db-vector`)：Chat 服务集成 Prisma ORM 持久化会话与历史消息，实现多格式文档解析、智能切块、向量相似度检索（RAG），以及基于 SSE 的异步长任务事件流推送。
-- **Chapter 06: 让 AI 做更懂你的交互—AI 结构化 UI 响应协议与工作台** (`chapter-06-ai-ui`)：打造基于 Zod 判别联合的 8 大原子 UI 组件契约、确定性交互状态机（UIFlowService）与全功能沉浸式三栏工作台（Workbench）。
-- **Chapter 07: Agent 推理的三层决策机制—路由、执行与优化**：确立智能体复杂决策体系，解耦路由层（Router）、执行层（Executor）与优化层（Optimizer）。
-- **Chapter 08: LangGraph 单 Agent 图实战—路由、循环与质量闭环** (`chapter-08-langgraph`)：引入 `@langchain/langgraph` 状态图（StateGraph），构建专家分析与 Critic 审查自循环质量闭环、Artifact 成果物版本化演进管理，以及私有模型 API Key 的 AES-256-GCM 落库加密与调用全链路可观测。
+- **LangGraph 状态图与质量闭环**：
+  - 基于 `@langchain/langgraph` 的 StateGraph 状态机设计，实现专家子图（Subgraph）编排、条件动态边（Conditional Edges）路由与 Critic-Refine 多轮反思修正质量闭环。
+- **Token 经济学与成本治理（Chapter 10）**：
+  - **模型分级路由（AgentModelSet）**：核心调度与风控专家绑定旗舰强模型，次要专家分配高性价比模型，降低 50%+ 调用成本。
+  - **上下文膨胀抑制**：滑动窗口消息裁剪（Message Trimmer）+ 长对话自动摘要压缩（Conversation Compressor）。
+  - **运行时预算策略与熔断**：支持月度预算阶梯管控，80% 触发低风险专家自动降级，超 100% 触发调用熔断。
+  - **节点级 Usage 采集与前端可视化**：侧路自动提取持久化模型真实使用量，前端状态栏集成实时 Token 消耗、费用估算（USD/RMB）与降级状态徽标（`TokenCostBadge`）。
+- **Generative UI 与确定性状态机**：
+  - 基于 Zod 判别联合定义 8 类原子 UI 组件协议，结合确定性交互状态机（`UIFlowService`），使 AI 回复直接渲染为可操作组件并驱动业务闭环。
+- **Claude 级 Artifacts 成果物全生命周期管理**：
+  - 成果物多版本落库（`Artifact` / `ArtifactVersion`），支持右侧侧栏 Markdown 渲染、流程图渲染与基于用户指令的增量局部演进优化。
+- **企业级全链路安全防护**：
+  - **模型凭据落库加密**：采用 `AES-256-GCM` 算法对私有 API Key 进行落库加密，管理接口自动脱敏过滤。
+  - **RBAC 权限安全体系**：双 Token 轮转鉴权、毫秒级动态权限吊销（`tokenVersion`）与全链路操作审计。
 
 ---
 
@@ -27,12 +31,11 @@
 │   ├── chat-web/             # [Next.js 16] 智能工作台与成果物交互界面 (端口 3002)
 │   └── admin-web/            # [Next.js 16 + HeroUI] RBAC 权限管理控制中心 (端口 3100)
 ├── services/
-│   ├── chat/                 # [NestJS + LangGraph] 智能体图推理、Artifact 管理与调用链服务 (端口 4001)
+│   ├── chat/                 # [NestJS + LangGraph] 智能体图推理、成本治理与 Artifact 服务 (端口 4005)
 │   └── user-system/          # [NestJS + Prisma] 认证鉴权与用户权限微服务 (端口 4002)
 ├── packages/
-│   └── contracts/            # TypeScript 共享数据类型契约与 Zod Schema
+│   └── contracts/            # TypeScript 共享数据契约与 Zod Schema 验证库
 ├── docs/
-│   ├── tutorials/            # 📚 配套实战教程知识库 (全 11 章节与分支映射)
 │   └── apifox/               # Apifox 接口测试导出集合 (按章节归档)
 ├── infra/
 │   └── compose/              # Dockerfile 镜像构建与 Docker Compose 容器编排
@@ -40,25 +43,23 @@
 │       ├── Dockerfile.web    # 前端独立运行时镜像
 │       ├── compose.yaml      # 生产容器环境编排
 │       └── compose.dev.yaml  # 开发热重载与 PostgreSQL 容器编排
-├── pnpm-workspace.yaml       # pnpm monorepo 工作区配置
-├── turbo.json                # Turborepo 任务编排与依赖拓扑流水线
-├── tsconfig.base.json        # 基础 TypeScript 编译与路径别名配置
-└── package.json              # 根工程脚本与统一包管理器配置
+├── pnpm-workspace.yaml       # pnpm monorepo 工作区拓扑配置
+├── turbo.json                # Turborepo 任务编排与构建流水线
+├── tsconfig.base.json        # 全局 TypeScript 基础编译与路径映射配置
+└── package.json              # 根工程依赖与统一启动脚本
 ```
 
 ---
 
 ## 🛠️ 技术栈清单
 
-- **Monorepo 管理**：`pnpm workspaces` + `Turborepo` 统一驱动任务拓扑构建与依赖硬链接
-- **前端工程**：Next.js 16 (Turbopack, App Router)、React 19、Tailwind CSS、HeroUI、Lucide Icons
-- **后端框架**：NestJS 12 (TypeScript, Express 适配器, Module / Controller / Service 分层)
-- **智能体与图编排**：`@langchain/langgraph` (StateGraph 状态图、条件边、循环反思与子图编排)
-- **大模型生态**：`@langchain/core`、`@langchain/openai`、`zod` (LCEL 管道、结构化输出、Tool Loop)
-- **数据持久层**：PostgreSQL 16、Prisma ORM (Schema 迁移、种子填充、类型生成)
-- **安全与加密**：Node.js Crypto (AES-256-GCM 模型凭据落库加密)、JWT 双 Token 轮转鉴权
-- **共享契约模式**：`@autix/contracts` 标准 CommonJS / TypeScript 输出，保证前后端零沟通成本契约对齐
-- **容器化与运维**：Docker & Docker Compose、Alpine 极简镜像分阶段构建
+- **工作区拓扑**：`pnpm workspaces` + `Turborepo` 任务流水线构建与依赖硬链接
+- **前端工程**：Next.js 16 (App Router, Turbopack)、React 19、Tailwind CSS、HeroUI、Lucide Icons
+- **后端工程**：NestJS 12 (TypeScript, 模块化分层架构, Express 适配器)
+- **智能体编排**：`@langchain/langgraph`、`@langchain/core`、`@langchain/openai`、`zod`
+- **数据持久层**：PostgreSQL 16、Prisma ORM (多 Schema 隔离、数据迁移、自动生成 Client)
+- **安全与加密**：Node.js Crypto (`AES-256-GCM` 凭据加密)、JWT 双 Token 轮转与守卫
+- **容器与环境**：Docker Compose、Alpine 极简镜像分阶段构建
 
 ---
 
@@ -68,286 +69,114 @@
 
 - **Node.js**：`>= 22.0.0`
 - **pnpm**：`>= 10.0.0`
-- **Docker & Docker Compose**（可选，用于一键拉起 PostgreSQL 及容器化部署）
-
-在根目录下安装全量工作区依赖：
+- **Docker**（用于本地启动 PostgreSQL 数据库）
 
 ```bash
+# 全工作区安装依赖
 pnpm install
 ```
 
-### 2. 环境变量配置
-
-请在对应服务目录下建立 `.env` 配置文件：
-
-- **`services/chat/.env`**：
-  ```env
-  MODEL_NAME=gpt-4o-mini
-  OPENAI_API_KEY=sk-your-key
-  OPENAI_BASE_URL=https://api.openai.com/v1
-  PORT=4001
-  DATABASE_URL="postgresql://postgres:postgres123@localhost:5432/autix_chat?schema=public"
-  JWT_SECRET="autix_rbac_jwt_secret_key_2026_super_secure"
-  # 可选：私有模型 API Key 的 AES-256-GCM 落库加密密钥（未配时回退使用 JWT_SECRET）
-  MODEL_CONFIG_SECRET="your-32byte-secret-key-for-model-config"
-  ```
-- **`services/user-system/.env`**：
-  ```env
-  DATABASE_URL="postgresql://postgres:postgres123@localhost:5432/autix_db?schema=public"
-  JWT_SECRET="autix_rbac_jwt_secret_key_2026_super_secure"
-  JWT_REFRESH_SECRET="autix_rbac_jwt_refresh_secret_key_2026_super_secure"
-  PORT=4002
-  ```
-- **`clients/chat-web/.env.local`**：
-  ```env
-  NEXT_PUBLIC_CHAT_API_URL=http://localhost:4001
-  NEXT_PUBLIC_USER_API_URL=http://localhost:4002/api/v1
-  PORT=3002
-  ```
-- **`clients/admin-web/.env.local`**：
-  ```env
-  NEXT_PUBLIC_USER_API_URL=http://localhost:4002/api/v1
-  PORT=3100
-  ```
-
----
-
-## 🚀 启动与构建指令
-
-### 一键启动模式
-
-```bash
-# 并发启动工作区所有服务 (chat, user-system, chat-web, admin-web)
-pnpm dev
-
-# 一键并发启动 RBAC 权限管理系统 (user-system + admin-web)
-pnpm dev:rbac
-```
-
-### 独立子系统启动
-
-```bash
-# 启动需求分析提取前端 (端口 3002)
-pnpm dev:chat-web
-
-# 启动 LangChain 需求分析后端服务 (端口 4001)
-pnpm dev:chat
-
-# 启动 RBAC 权限系统管理前端 (端口 3100)
-pnpm dev:admin-web
-
-# 启动 RBAC 用户与鉴权微服务 (端口 4002)
-pnpm dev:user-system
-```
-
-### 全局编译构建与类型检查
-
-```bash
-# 依据 Turborepo 拓扑依赖全量构建各模块
-pnpm run build
-
-# 全工作区执行 TypeScript 静态类型检查
-pnpm run typecheck
-```
-
-### 智能体状态图与脚本测试 (Chat 微服务)
-
-```bash
-# 执行 LangGraph 状态图完整端到端推理测试
-pnpm --filter @autix/chat test:graph
-
-# 执行领域专家子图 (Subgraph) 独立编排测试
-pnpm --filter @autix/chat test:subgraph
-
-# 执行 Critic 质检评审与反思循环测试
-pnpm --filter @autix/chat test:critic
-
-# 打印编译后 StateGraph 的 Mermaid 流程架构图
-pnpm --filter @autix/chat graph:mermaid
-```
-
----
-
-## 🔄 Chapter 08: LangGraph 单 Agent 图实战—路由、循环与质量闭环
-
-> **对应分支**：`chapter-08-langgraph`
-
-在第八阶段，系统全面迁移至 **LangGraph (`@langchain/langgraph`)** 状态图体系，彻底告别单一线性执行链（LCEL），构建了具备**分支路由、多轮反思、质检闭环、成果物演进与安全凭据体系**的工业级生产智能体：
-
-### 1. 核心架构与特性
-
-- **基于 StateGraph 的确定性状态图流转**：
-  - 定义强类型状态契约（`StateAnnotation`）：精准捕获用户输入、领域分类、专家分析矩阵、生成草案、Critic 评审报告与迭代次数。
-  - **条件动态边（Conditional Edges）**：根据 Critic 节点的结构化评分（阈值控制）与最大反思轮次限制，动态决定继续进入 `revise` 反思循环，或流转至 `END` 正式交付成果。
-  - **专家子图编排（Subgraph）**：将复杂业务域分析器解耦为独立子图，实现图节点的模块化复用与单独评测。
-- **Claude 级 Artifacts 成果物全生命周期管理**：
-  - **版本化数据库建模**：设计 `Artifact` 与 `ArtifactVersion` 关联模型，记录每次修改的变更说明、完整内容与版本流水。
-  - **局部优化与迭代引擎**：提供 `OptimizeArtifactDto`，用户可在侧边面板直接针对选中成果物提出修改指令，智能体基于已有成果完成针对性增量修改与新版本沉淀。
-  - **前端双栏沉浸式预览**：支持 Markdown、流程图表渲染、版本历史回溯与一键复制导出。
-- **企业级私有模型凭据安全与全链路可观测**：
-  - **落库加密与接口脱敏**：采用 `AES-256-GCM` 算法对私有模型 `apiKey` 落库加密（前缀 `enc:v1:` 兼容历史明文），对外管理 API 全面实施 `maskSecrets` 字段脱敏，杜绝凭据外泄。
-  - **双层凭据解析策略**：公共公开模型统一走服务端环境变量（防止恶意注入），私有模型优先解密使用数据库配置。
-  - **流式可观测 Meta 回传**：SSE 传输链路在元数据帧（`meta`）中精准回传本次推理实际生效的 `modelName` 与 `keySource`（`db` / `env` / `default` / `none`），并在前端顶部工作区实时可视化呈现。
-
----
-
-## 🧭 Chapter 07: Agent 推理的三层决策机制—路由、执行与优化
-
-在第七阶段，系统提炼并确立了企业级智能体推理的核心设计范式：
-
-- **路由层（Router）**：混合式意图分发——结合预置状态机规则与轻量分类模型，将模糊的用户诉求精准导向最匹配的专业知识库与处理流。
-- **执行层（Executor）**：领域专家 Agent 协同——挂载结构化 Prompt 契约与沙箱工具，自主生成严谨的需求规格文档。
-- **优化层（Optimizer）**：独立 Critic 评审与反思——采用“角色对立”机制进行自我批判，指出遗漏缺陷并给出量化评审依据，保障交付质量。
-
----
-
-## 🎨 Chapter 06: AI 结构化 UI 响应协议与工作台 (AI UI Protocol & Workbench)
-
-> **对应分支**：`chapter-06-ai-ui`
-
-在第六阶段，系统突破了纯文本交互限制，实现了 **AI 结构化 UI 协议（UI Protocol）** 与 **沉浸式三栏智能工作台（Workbench）**，让大模型具备动态生成交互式组件与驱动业务闭环的能力：
-
-### 1. 核心特性
-
-- **Zod 驱动的结构化 UI 响应协议（UI Protocol）**：
-  - 基于判别联合（Discriminated Union）定义标准组件契约，覆盖 `text`、`selection`、`form`、`confirmation`、`card`、`steps`、`table`、`action_buttons` 8 种原子交互组件。
-  - 结合 LangChain `withStructuredOutput` 强类型约束生成与意图规则守护，使 AI 响应直接流转为前端可交互界面。
-- **确定性交互状态机（UIFlowService）**：
-  - 后端提供状态机闭环：`select_type`（选择需求类型）→ `fill_detail`（表单填写）→ `confirm`（结果确认）→ `result`（全息成果与步骤推进），支持用户操作回传、数据暂存与状态回退。
-- **前端 AI UI 动态渲染引擎**：
-  - 位于 [`clients/chat-web/components/ai-ui`](./clients/chat-web/components/ai-ui)，封装高质感暗黑主题组件库与 `ComponentRenderer` 动态分发引擎。
-- **全功能沉浸式三栏工作台（Workbench）**：
-  - 首页全面重构成三栏工作台：集成左侧历史会话导航、中间智能交互主区（支持极简、分屏与专注模式）与右侧模型参数/知识库配置面板。
-  - 支持多路由独立体验：工作台主页（`/`）、需求提取平台（`/extract`）、UI 协议对话（`/ui-chat`）及组件画廊（`/ui-gallery`）。
-
----
-
-## 📡 Chapter 05: 数据库持久化、RAG 向量检索与任务流通知
-
-> **对应分支**：`chapter-05-db-vector`
-
-在第五阶段，Chat 服务完成了生产级工程化演进，接入持久化数据库、RAG 文档知识库与长任务实时通知：
-
-### 1. 核心特性
-
-- **数据持久化与会话管理（Prisma ORM）**：
-  - 为 Chat 服务接入独立 PostgreSQL / Prisma 7，实现会话（Conversation）与消息（Message）的完整持久化读写（`DbChatHistory`），替代纯内存存储。
-- **文档知识库与 RAG 向量检索（Document & Vector Store）**：
-  - **多格式文档解析**：支持 PDF、Word (`.docx`) 及纯文本解析，统一提取正文。
-  - **智能切块与嵌入**：基于 Recursive 分块策略与 Transformers / OpenAI 向量嵌入（Embedding）。
-  - **相似度检索**：实现基于余弦相似度的向量检索接口，为 Agent 提供精准上下文召回。
-- **异步长任务与 SSE 实时事件通知（Task SSE Notification）**：
-  - 建立基于 Server-Sent Events (SSE) 的事件通道，实时向前端推送文档切块、向量化进度及异步任务执行状态。
-- **通用规范模块健全**：
-  - 补齐全局异常过滤器（`AllExceptionsFilter`）、标准化响应拦截器（`ResponseInterceptor`）与 JWT 鉴权守卫。
-
-### 2. 常用操作指令
-
-```bash
-# 启动本地 PostgreSQL 容器
-docker compose -f infra/compose/compose.dev.yaml up -d postgres
-
-# 同步 Chat 服务数据库表结构
-pnpm --filter @autix/chat db:push
-
-# 打开 Prisma 数据库管理面板 (默认端口 51212)
-pnpm --filter @autix/chat db:studio
-```
-
----
-
-## 🧠 Chapter 04: 智能体记忆与多 Agent 协同编排
-
-> **对应分支**：`chapter-04-agent-memory-tools`
-
-在第四阶段，系统由单链调用进阶至自主智能体（Agent）体系，实现了会话记忆与多智能体分工协同：
-
-### 1. 核心特性
-
-- **可运行会话记忆（Runnable Memory）**：
-  - 基于 LangChain `RunnableWithMessageHistory` 统一维护多轮对话状态，支持上下文自动追踪与记忆管理。
-- **安全沙箱工具链（Business & Filesystem Tools）**：
-  - **业务计算工具**：封装指标计算、格式化清洗等规范 LangChain Tools。
-  - **安全文件系统工具**：提供受限沙箱文件读写能力，支持 Agent 自主读取标准规约并落盘需求规格报告（Markdown / JSON）。
-- **多智能体协同编排器（Multi-Agent Orchestrator）**：
-  - 构建主调度器（Orchestrator）与领域子 Agent（分析师、安全合规、架构设计等）的协作工作流，实现复杂需求任务的自动化拆分与汇总交付。
-
----
-
-## 🤖 Chapter 03: 基于 LangChain 的需求分析提取平台
-
-在第三阶段，项目全面引入 **LangChain v0.3+** 与 **LCEL（LangChain Expression Language）** 架构，实现了从基础模型调用到智能需求抽取、工具循环执行的工业级落地：
-
-### 1. 功能点
-
-- **LCEL 链式管道架构**：通过 `prompt.pipe(model).pipe(outputParser)` 编排声明式调用链，天然具备流式（Stream）、批处理（Batch）与单次调用（Invoke）一致性。
-- **Zod 驱动的类型级结构化输出**：
-  - 定义统一契约 [`packages/contracts`](./packages/contracts/src/index.ts) 中的 `RequirementSchema`：强制解析 `action`（核心动作）、`constraints`（约束列表）、`entities`（实体要素）。
-  - 利用 `withStructuredOutput` 保证大模型 100% 遵守 JSON 契约结构，彻底摆脱传统正则匹配与脏 JSON 解析。
-- **智能工具绑定与自动循环机制（Tool Loop）**：
-  - 封装规范的 LangChain Tools（计算器、词频统计、格式清洗等）。
-  - 实现基于 `AIMessage.tool_calls` 的自动调度循环（ReAct Loop），自动向模型回传 ToolMessage，直至输出最终需求分析结论。
-- **Linear 曜石黑沉浸式工作台**：
-  - 前端位于 [`clients/chat-web`](./clients/chat-web)，重构为左右双栏分屏工作台。
-  - 左侧配置面板与多功能调用触发器；右侧提供支持 JSON 语法高亮、实时 SSE 文本流、卡片式结构化结果及 Tool 调试折叠面板的智能终端面板。
-- **Apifox 接口规范资产**：
-  - 在 [`docs/apifox/chapter03-first-chain.json`](./docs/apifox/chapter03-first-chain.json) 中内置全套 API 调试文件，开箱即用。
-
-### 2. 界面效果展示
-
-![Chapter 03 需求分析提取平台界面](./images/chapter03/01.png)
-
----
-
-## 🔐 Chapter 02: RBAC 权限管控系统
-
-在第二阶段，项目集成了企业级 RBAC（基于角色的访问控制）权限管理系统，涵盖前后端全链路安全鉴权闭环：
-
-### 快速启动 RBAC 全套系统
+### 2. 启动数据库底座
 
 ```bash
 # 1. 启动本地 PostgreSQL 容器
 docker compose -f infra/compose/compose.dev.yaml up -d postgres
 
-# 2. 同步数据库表结构并灌入初始种子数据 (组织、角色、权限树与预设账号)
-pnpm --filter @autix/user-system prisma:push
-pnpm --filter @autix/user-system prisma:seed
-
-# 3. 一键并发启动 RBAC 前后端
-pnpm dev:rbac
+# 2. 同步并初始化数据库表结构
+pnpm --filter @autix/chat db:push          # 同步 chat 服务表结构
+pnpm --filter @autix/user-system prisma:push # 同步 RBAC 权限系统表结构
+pnpm --filter @autix/user-system prisma:seed # 灌入预设权限与账号
 ```
 
-### 预设测试账号与角色
+### 3. 环境变量配置
 
-| 账号        | 密码        | 角色           | 权限范围                                                    |
-| :---------- | :---------- | :------------- | :---------------------------------------------------------- |
-| `admin`     | `Admin123!` | `super_admin`  | 全局完全支配权限（包含 `*:*:*` 旁路放行），防删除保护       |
-| `test_ops`  | `Admin123!` | `admin`        | 系统运维主管，拥有除超级权限外的全量业务管理与配置权限      |
-| `test_user` | `User123!`  | `general_user` | 普通员工，仅具备基础菜单与列表查询权限（写操作受 403 拦截） |
+请在对应子目录下创建 `.env` 或 `.env.local` 配置文件（可直接参考各目录下的 `.env.example`）：
 
-### 核心安全机制
-
-- **双 Token 自动轮转**：短效 Access Token (15m) + 长效 Refresh Token (7d)，支持重放攻击拦截与即时吊销。
-- **动态权限即时失效**：依托 `User.tokenVersion` 机制，管理员调整权限或禁用账号后毫秒级阻断已签发凭据。
-- **Next.js 16 Proxy**：采用 Next.js 16 规范的 `proxy.ts` 流量代理边界进行前端路由拦截与安全控制。
-- **全链路审计追踪**：集成 `LoginLog` 登录流水与 `OperationLog` 细粒度操作审计（包含入参敏感信息自动脱敏）。
+- **`services/chat/.env`**：
+  ```env
+  PORT=4005
+  OPENAI_API_KEY=sk-your-model-key
+  OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+  DATABASE_URL="postgresql://postgres:postgres123@localhost:5432/autix_chat?schema=public"
+  JWT_SECRET="autix_rbac_jwt_secret_key_2026_super_secure"
+  MODEL_CONFIG_SECRET="your-32byte-secret-key-for-model-config"
+  ```
+- **`services/user-system/.env`**：
+  ```env
+  PORT=4002
+  DATABASE_URL="postgresql://postgres:postgres123@localhost:5432/autix_db?schema=public"
+  JWT_SECRET="autix_rbac_jwt_secret_key_2026_super_secure"
+  JWT_REFRESH_SECRET="autix_rbac_jwt_refresh_secret_key_2026_super_secure"
+  ```
+- **`clients/chat-web/.env.local`**：
+  ```env
+  PORT=3002
+  NEXT_PUBLIC_CHAT_API_URL=http://localhost:4005
+  NEXT_PUBLIC_USER_API_URL=http://localhost:4002/api/v1
+  ```
+- **`clients/admin-web/.env.local`**：
+  ```env
+  PORT=3100
+  NEXT_PUBLIC_USER_API_URL=http://localhost:4002/api/v1
+  ```
 
 ---
 
-## 🐳 Docker 容器化编排
+## 🚀 统一脚本与启动指令
 
-项目所有容器配置文件集中存放在 [`infra/compose`](./infra/compose) 目录下。
-
-### 生产容器编排启动
+### 服务启动
 
 ```bash
-docker compose -f infra/compose/compose.yaml up --build
+# 并发启动所有前后端微服务 (chat, user-system, chat-web, admin-web)
+pnpm dev
+
+# 仅启动智能体对话全栈系统 (chat-web + chat)
+pnpm dev:chat-web   # 前端工作台: http://localhost:3002
+pnpm dev:chat       # 智能体后端: http://localhost:4005
+
+# 仅启动企业级 RBAC 权限管理全栈系统 (admin-web + user-system)
+pnpm dev:rbac       # 权限管理端: http://localhost:3100 (默认账号: admin / Admin123!)
 ```
 
-### 本地开发热更新模式
+### 验证与测试套件
 
-通过挂载宿主机源码卷到容器内，支持代码修改后实时重载：
+| 验证目标 | 指令 | 说明 |
+| :--- | :--- | :--- |
+| **全库编译构建** | `pnpm run build` | Turborepo 拓扑并发构建全量应用 |
+| **全库类型检查** | `pnpm run typecheck` | TypeScript 静态类型编译无错误校验 |
+| **Token 成本治理测试** | `pnpm --filter @autix/chat test test/chapter10-token-economics.spec.ts` | 验证分级路由、滑动裁剪与预算熔断策略 |
+| **状态图推理闭环测试** | `pnpm --filter @autix/chat test:graph` | 执行 LangGraph 端到端状态机测试 |
+| **质检反思与专家测试** | `pnpm --filter @autix/chat test:critic` | 验证 Critic-Refine 自循环纠错 |
+| **生成架构流程图** | `pnpm --filter @autix/chat graph:mermaid` | 导出 StateGraph 编译后的 Mermaid 架构图 |
+| **数据库可视化面板** | `pnpm --filter @autix/chat db:studio` | 打开 Prisma Studio 管理持久化数据 |
+
+---
+
+## 🗺️ 演进路线与分支映射 (Roadmap)
+
+本项目采用分阶段渐进式落地演进路线，各技术里程碑的源码已归档至对应 Git 分支。可通过 `git checkout <branch>` 检出对应阶段的完整实现：
+
+| 阶段里程碑 | 对应 Git 分支 | 核心涵盖知识与技术要点 |
+| :--- | :--- | :--- |
+| **Chapter 01: 全栈工程化底座** | `chapter-01-monorepo-setup` | pnpm Workspaces + Turborepo 多包单体架构、类型共享与 Docker 热更底座 |
+| **Chapter 02: 企业级 RBAC 权限管控** | `chapter-02-user-system` | PostgreSQL + Prisma 建模、双 Token 轮转鉴权、操作审计与 Next.js 16 代理中台 |
+| **Chapter 03: 需求分析提取平台** | `chapter-03-first-chain` | LangChain LCEL 声明式调用链、Zod 结构化抽取契约与 Tool 循环调用 |
+| **Chapter 04: 记忆与多 Agent 编排** | `chapter-04-agent-memory-tools` | Runnable 记忆上下文维护、沙箱文件工具链与主子 Agent 协同编排 |
+| **Chapter 05: 数据库与 RAG 向量检索** | `chapter-05-db-vector` | 向量化存储与相似度检索、文档切块嵌入、持久化会话与 SSE 异步长任务 |
+| **Chapter 06: AI UI 响应协议与工作台** | `chapter-06-ai-ui` | 8 大原子 UI 协议契约、UIFlowService 确定性交互状态机与三栏工作台 |
+| **Chapter 08: LangGraph 状态图与闭环** | `chapter-08-langgraph` | StateGraph 状态机、条件动态路由、Critic 反思闭环、Artifacts 版本演进与密钥加密 |
+| **Chapter 10: Token 经济学与成本治理** | `chapter-10-token` | 模型分级路由、滑动裁剪与长对话摘要压缩、节点 Usage 采集与预算熔断告警 |
+
+---
+
+## 🐳 Docker 生产容器编排
+
+项目所有容器构建文件存放在 [`infra/compose`](./infra/compose) 目录：
 
 ```bash
+# 生产多容器构建与启动
+docker compose -f infra/compose/compose.yaml up --build
+
+# 本地热开发容器编排
 docker compose -f infra/compose/compose.dev.yaml up
 ```

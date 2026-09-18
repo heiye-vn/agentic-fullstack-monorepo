@@ -272,6 +272,15 @@ export interface UIPayload {
   interactionState?: ComponentInteractionState;
 }
 
+/** Token 消耗与成本估算元数据（第十章 Token 经济学） */
+export interface TokenUsageMeta {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  estimatedCostUsd: number;
+  isEstimated?: boolean;
+}
+
 /** 元数据载荷 */
 export interface MetaPayload {
   uiStage?: UIStage;
@@ -286,6 +295,10 @@ export interface MetaPayload {
   modelName?: string | null;
   /** 密钥来源：db=库里配的私有密钥 / env=服务端环境变量 / default=YAML 默认 / none=本轮未调模型 */
   keySource?: 'db' | 'env' | 'default' | 'none';
+  /** 本轮 Token 消耗明细与成本估算 */
+  tokenUsage?: TokenUsageMeta | null;
+  /** 模型覆盖/预算降级原因说明 */
+  overrideReason?: string | null;
 }
 
 /** 错误载荷 */
