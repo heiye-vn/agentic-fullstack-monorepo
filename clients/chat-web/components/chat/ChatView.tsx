@@ -490,6 +490,8 @@ export function ChatView({ sessionId }: ChatViewProps) {
                   clearProgress();
                   finalizeAIUIStreaming();
                   void fetchSessions();
+                  // 正常流结束必须主动 abort，防止 fetchEventSource 误判为断线自动发起无谓重试
+                  abortRef.current?.abort();
                   break;
 
                 case 'error':
@@ -522,6 +524,14 @@ export function ChatView({ sessionId }: ChatViewProps) {
           async onopen(response) {
             if (response.ok) {
               return;
+            }
+            if (response.status === 401) {
+              abortRef.current?.abort();
+              throw new Error('认证会话已失效 (HTTP 401)，请重新登录后重试');
+            }
+            if (response.status >= 400 && response.status < 500) {
+              abortRef.current?.abort();
+              throw new Error(`客户端请求异常: HTTP ${response.status}`);
             }
             throw new Error(`HTTP ${response.status}`);
           },
@@ -717,6 +727,8 @@ export function ChatView({ sessionId }: ChatViewProps) {
                   clearProgress();
                   finalizeAIUIStreaming();
                   void fetchSessions();
+                  // 正常流结束必须主动 abort，防止自动发起无谓重试
+                  abortRef.current?.abort();
                   break;
 
                 case 'error':
@@ -751,6 +763,14 @@ export function ChatView({ sessionId }: ChatViewProps) {
           async onopen(response) {
             if (response.ok) {
               return;
+            }
+            if (response.status === 401) {
+              abortRef.current?.abort();
+              throw new Error('认证会话已失效 (HTTP 401)，请重新登录后重试');
+            }
+            if (response.status >= 400 && response.status < 500) {
+              abortRef.current?.abort();
+              throw new Error(`客户端请求异常: HTTP ${response.status}`);
             }
             throw new Error(`HTTP ${response.status}`);
           },

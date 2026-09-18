@@ -83,7 +83,7 @@ export const ThinkingIndicator: React.FC<ThinkingIndicatorProps> = ({
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-800">
           <div
             className="h-full rounded-full bg-linear-to-r from-cyan-500 via-blue-500 to-indigo-500 transition-all duration-500 ease-out"
-            style={{ width: progress ? `${Math.max(5, percentage)}%` : "15%" }}
+            style={{ width: progress ? `${Math.max(5, percentage)}%` : '0%' }}
           />
         </div>
 
