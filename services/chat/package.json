@@ -19,6 +19,7 @@
     "test:graph": "npx tsx scripts/test-graph.ts",
     "test:subgraph": "npx tsx scripts/test-subgraph.ts",
     "test:critic": "npx tsx scripts/test-critic.ts",
+    "test:mcp-stdio": "npx tsx scripts/test-mcp-stdio.ts",
     "graph:mermaid": "npx tsx scripts/print-mermaid.ts",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
