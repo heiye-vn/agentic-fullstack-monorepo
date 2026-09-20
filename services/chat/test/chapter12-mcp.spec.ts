@@ -27,9 +27,9 @@ import {
   checkToolPermission,
   requiresConfirmation,
 } from '../src/mcp/mcp-security.js';
-import { createRequirementAnalyzerServer } from '../mcp-servers/requirement-analyzer/src/server.js';
-import { createWebSearchServer } from '../mcp-servers/web-search/src/server.js';
-import { createRagServer } from '../mcp-servers/rag-server/src/server.js';
+import { createRequirementAnalyzerServer } from '../src/mcp-servers/requirement-analyzer/src/server.js';
+import { createWebSearchServer } from '../src/mcp-servers/web-search/src/server.js';
+import { createRagServer } from '../src/mcp-servers/rag-server/src/server.js';
 import {
   withMcpTools,
   pickMcpTools,

@@ -11,7 +11,7 @@ import { UIFlowService } from '../llm/ui-protocol/ui-flow.service.js';
 import type { UIAction } from '../llm/ui-protocol/ui-types.js';
 import { SearchService } from '../document/search.service.js';
 import { EmbeddingService } from '../document/embedding.service.js';
-import { createVectorSearchFn } from '../../rag/retrieval/vector-search-fn.js';
+import { createVectorSearchFn } from '../rag/retrieval/vector-search-fn.js';
 import type { ExpertRagDeps, ExpertMcpDeps } from '../llm/graph/experts.js';
 import { getSharedMcpManager } from '../mcp/mcp-runtime.js';
 import { ArtifactService } from '../artifact/artifact.service.js';

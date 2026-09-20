@@ -32,7 +32,7 @@ import {
 import {
   resolveBudgetAction,
   type BudgetPolicyOutput,
-} from '../../src/llm/cost/budget-policy.js';
+} from '../../llm/cost/budget-policy.js';
 
 export const RAG_TOOL_NAME = 'search_knowledge_base';
 

@@ -13,8 +13,8 @@
  * 任何一个 Server 连不上都不会让整个装配失败 —— connectAll 内部按 Server 降级。
  */
 import { MCPManager, type ServerRegistration } from './mcp-manager.js';
-import { createRequirementAnalyzerServer } from '../../mcp-servers/requirement-analyzer/src/server.js';
-import { createWebSearchServer } from '../../mcp-servers/web-search/src/server.js';
+import { createRequirementAnalyzerServer } from '../mcp-servers/requirement-analyzer/src/server.js';
+import { createWebSearchServer } from '../mcp-servers/web-search/src/server.js';
 
 export const REQ_SERVER_ID = 'requirement-analyzer';
 export const WS_SERVER_ID = 'web-search';

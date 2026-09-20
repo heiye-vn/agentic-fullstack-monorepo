@@ -23,7 +23,7 @@ import {
 import {
   createRagTool,
   RAG_TOOL_NAME,
-} from '../../../rag/agent/rag-tool.js';
+} from '../../rag/agent/rag-tool.js';
 
 // ============================================================
 // 1. 专家子图配置契约与通用工厂

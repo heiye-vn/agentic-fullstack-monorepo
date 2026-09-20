@@ -50,7 +50,7 @@ function line(title: string) {
 async function smokeRequirementAnalyzer() {
   line('1. requirement-analyzer（stdio 子进程）');
 
-  const client = new MCPClientService(stdioEntry('mcp-servers/requirement-analyzer/src/index.ts'), {
+  const client = new MCPClientService(stdioEntry('src/mcp-servers/requirement-analyzer/src/index.ts'), {
     timeoutMs: 60_000,
   });
   await client.connect();
@@ -79,7 +79,7 @@ async function smokeRequirementAnalyzer() {
 async function smokeWebSearch() {
   line('2. web-search（无 TAVILY_API_KEY → mock 模式）');
 
-  const client = new MCPClientService(stdioEntry('mcp-servers/web-search/src/index.ts'), {
+  const client = new MCPClientService(stdioEntry('src/mcp-servers/web-search/src/index.ts'), {
     timeoutMs: 60_000,
   });
   await client.connect();
@@ -107,7 +107,7 @@ async function smokeManagerWithFallback() {
   manager.register({
     id: 'requirement-analyzer',
     prefix: 'req_',
-    spec: stdioEntry('mcp-servers/requirement-analyzer/src/index.ts'),
+    spec: stdioEntry('src/mcp-servers/requirement-analyzer/src/index.ts'),
     timeoutMs: 60_000,
   });
 

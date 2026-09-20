@@ -20,48 +20,48 @@ import {
   normalize,
   cosineSimilarity,
   euclideanDistance,
-} from '../rag/embedding/similarity.js';
-import { chunkText } from '../rag/chunking/document-chunker.js';
-import { chunkParentChild } from '../rag/chunking/parent-child-chunker.js';
+} from '../src/rag/embedding/similarity.js';
+import { chunkText } from '../src/rag/chunking/document-chunker.js';
+import { chunkParentChild } from '../src/rag/chunking/parent-child-chunker.js';
 import {
   bruteForceKnn,
   similaritySearch,
   upsertChunks,
   type VectorStoreRecord,
   type SearchResult,
-} from '../rag/retrieval/vector-store.js';
+} from '../src/rag/retrieval/vector-store.js';
 import {
   rerankResults,
   retrieveWithRerank,
   type RerankerClient,
-} from '../rag/retrieval/reranker.js';
-import { rewriteQuery, multiQuerySearch } from '../rag/retrieval/query-rewriter.js';
+} from '../src/rag/retrieval/reranker.js';
+import { rewriteQuery, multiQuerySearch } from '../src/rag/retrieval/query-rewriter.js';
 import {
   hybridSearch,
   rrfFuse,
   rrfRanked,
   bm25Search,
   tokenize,
-} from '../rag/retrieval/hybrid-search.js';
-import { ragAsk, RAG_NO_CONTEXT_FALLBACK } from '../rag/pipeline/rag-pipeline.js';
-import { hydeSearch } from '../rag/pipeline/hyde.js';
+} from '../src/rag/retrieval/hybrid-search.js';
+import { ragAsk, RAG_NO_CONTEXT_FALLBACK } from '../src/rag/pipeline/rag-pipeline.js';
+import { hydeSearch } from '../src/rag/pipeline/hyde.js';
 import {
   adaptiveRagAsk,
   fixedClassifier,
-} from '../rag/pipeline/adaptive-rag.js';
+} from '../src/rag/pipeline/adaptive-rag.js';
 import {
   recallAtK,
   mrr,
   ndcgAtK,
-} from '../rag/evaluation/retrieval-metrics.js';
-import { runRagas } from '../rag/evaluation/ragas-runner.js';
+} from '../src/rag/evaluation/retrieval-metrics.js';
+import { runRagas } from '../src/rag/evaluation/ragas-runner.js';
 import {
   createRagTool,
   RAG_TOOL_NAME,
   RAG_TOOL_DESCRIPTION,
-} from '../rag/agent/rag-tool.js';
+} from '../src/rag/agent/rag-tool.js';
 import { withRagTool } from '../src/llm/graph/experts.js';
-import { createVectorSearchFn } from '../rag/retrieval/vector-search-fn.js';
+import { createVectorSearchFn } from '../src/rag/retrieval/vector-search-fn.js';
 
 function logSection(title: string) {
   console.log(`\n  ─── ${title} ───`);
