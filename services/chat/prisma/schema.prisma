@@ -104,9 +104,20 @@ model DocumentChunk {
   chunkIndex Int
   embedding  Unsupported("vector")?
 
+  /**
+   * 生成该向量的 Embedding 模型名（教程 11.3.7）
+   *
+   * 必须存，因为"入库用模型 A、查询用模型 B"会让检索结果变成纯噪音，
+   * 而这类事故在现象上只是"召回变差"，极难排查（见 11.12 FAQ Q4）。
+   * 默认值取历史数据实际使用的模型：既保证存量行有值（NOT NULL 不迁移失败），
+   * 又让后续换模型时能靠 expectedModelName 校验一把拦住。
+   */
+  modelName  String                 @default("Xenova/paraphrase-multilingual-MiniLM-L12-v2") @db.VarChar(128)
+
   document   Document               @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@index([documentId])
+  @@index([modelName])
   @@map("document_chunks")
 }
 
