@@ -1,0 +1,27 @@
+[
+  {
+    "question": "企业版每月最多能创建多少个项目？",
+    "expectedDocIds": ["pricing-v2.1"],
+    "groundTruth": "企业版单工作区最多 200 个项目。"
+  },
+  {
+    "question": "如何配置企业 SSO 单点登录？",
+    "expectedDocIds": ["auth-sso-guide"],
+    "groundTruth": "管理员可在控制台设置选择 SAML 2.0 或 OIDC 协议完成企业身份源集成。"
+  },
+  {
+    "question": "操作审计日志在系统中默认保留多长时间？",
+    "expectedDocIds": ["audit-policy-v1"],
+    "groundTruth": "所有核心变更与访问审计日志保留 180 天。"
+  },
+  {
+    "question": "批量导入用户时支持哪些文件格式？",
+    "expectedDocIds": ["user-import-guide"],
+    "groundTruth": "批量导入用户目前仅支持 UTF-8 编码的 CSV 格式。"
+  },
+  {
+    "question": "免费版支持的最大项目数是多少？",
+    "expectedDocIds": ["pricing-v2.1"],
+    "groundTruth": "免费版单工作区最多支持 5 个项目。"
+  }
+]
