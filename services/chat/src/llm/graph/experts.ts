@@ -20,6 +20,10 @@ import {
   checkDataResidencyTool,
   checkRetentionPolicyTool,
 } from '../tools/expert-tools.js';
+import {
+  createRagTool,
+  RAG_TOOL_NAME,
+} from '../../../rag/agent/rag-tool.js';
 
 // ============================================================
 // 1. 专家子图配置契约与通用工厂
@@ -155,14 +159,62 @@ export function createExpertSubGraph(opts: ExpertOptions) {
 // ============================================================
 
 /**
+ * 11.10.3 挂载 RAG 工具所需的依赖
+ *
+ * RAG 检索需要"用户身份（权限过滤）"和"向量检索实现"，而专家子图原本只吃 model，
+ * 所以做成可选依赖：不传就不挂 RAG 工具，行为与第九章完全一致（向后兼容）。
+ */
+export interface ExpertRagDeps {
+  /** 用于 document 归属过滤，避免把他人文档的片段喂进上下文 */
+  userId: string;
+  /** 真实检索实现，可用 createVectorSearchFn(prisma, embedQuery, ...) 构造 */
+  searchFn: (query: string, topK?: number) => Promise<any[]>;
+  /** 第十章预算快照，用于工具调用前的闸门检查 */
+  getBudget?: () => { usedPercent: number };
+}
+
+/**
+ * 按需把 RAG 工具追加到专家工具列表
+ *
+ * 导出是为了可单测：挂载/不挂载是 11.10.3 的核心行为开关
+ */
+export function withRagTool(
+  tools: any[],
+  model: BaseChatModel,
+  rag?: ExpertRagDeps,
+): any[] {
+  if (!rag) return tools;
+  return [
+    ...tools,
+    createRagTool({
+      model,
+      userId: rag.userId,
+      searchFn: rag.searchFn,
+      getBudget: rag.getBudget,
+    }),
+  ];
+}
+
+/** 挂载 RAG 后追加到 system prompt 的使用提示 */
+const RAG_TOOL_HINT = `
+- 需要确认企业内部规范、历史决策、产品文档时，用 ${RAG_TOOL_NAME} 检索知识库；回答里保留它给出的引用来源`;
+
+/**
  * 2.1 功能分析专家 (Functional Expert)
  * 职责：功能拆解、用户交互流程、功能依赖与架构冲突检测
  */
-export function createFunctionalExpert(model: BaseChatModel) {
+export function createFunctionalExpert(
+  model: BaseChatModel,
+  rag?: ExpertRagDeps,
+) {
   return createExpertSubGraph({
     name: 'functional',
     model,
-    tools: [searchRequirementTool, checkConflictsTool, readFeatureSpecTool],
+    tools: withRagTool(
+      [searchRequirementTool, checkConflictsTool, readFeatureSpecTool],
+      model,
+      rag,
+    ),
     systemPrompt: `你是功能需求分析专家，专注评估需求的功能完整性、交互合理性和系统兼容性。
 
 **核心职责**：
@@ -190,7 +242,7 @@ export function createFunctionalExpert(model: BaseChatModel) {
 
 ## 冲突与重叠分析
 - 明确指出与现有功能的冲突（如有）
-- 提供解决方案或替代设计`,
+- 提供解决方案或替代设计` + (rag ? RAG_TOOL_HINT : ''),
     outputField: 'functionalAnalysis',
   });
 }
@@ -244,11 +296,18 @@ export function createPerformanceExpert(model: BaseChatModel) {
  * 2.3 安全分析专家 (Security Expert)
  * 职责：威胁建模、攻击面分析、认证鉴权与敏感数据保护策略
  */
-export function createSecurityExpert(model: BaseChatModel) {
+export function createSecurityExpert(
+  model: BaseChatModel,
+  rag?: ExpertRagDeps,
+) {
   return createExpertSubGraph({
     name: 'security',
     model,
-    tools: [checkSecurityPolicyTool, listAuthScenariosTool],
+    tools: withRagTool(
+      [checkSecurityPolicyTool, listAuthScenariosTool],
+      model,
+      rag,
+    ),
     systemPrompt: `你是信息安全分析专家，专注识别需求中的安全风险和合规要求。
 
 **核心职责**：
@@ -259,7 +318,7 @@ export function createSecurityExpert(model: BaseChatModel) {
 **工具使用策略**：
 - 先用 check_security_policy 检查需求是否触发已知安全策略
 - 如涉及身份认证或授权，用 list_auth_scenarios 了解当前认证体系
-- 基于 OWASP Top 10 和行业最佳实践进行分析
+- 基于 OWASP Top 10 和行业最佳实践进行分析${rag ? RAG_TOOL_HINT : ''}
 
 **输出必需章节（使用 Markdown 二级标题）**：
 ## 威胁与风险识别
@@ -289,15 +348,22 @@ export function createSecurityExpert(model: BaseChatModel) {
  * 2.4 合规分析专家 (Compliance Expert)
  * 职责：法律法规适用性、个人信息合规、数据驻留与生命周期管理
  */
-export function createComplianceExpert(model: BaseChatModel) {
+export function createComplianceExpert(
+  model: BaseChatModel,
+  rag?: ExpertRagDeps,
+) {
   return createExpertSubGraph({
     name: 'compliance',
     model,
-    tools: [
-      checkComplianceMatrixTool,
-      checkDataResidencyTool,
-      checkRetentionPolicyTool,
-    ],
+    tools: withRagTool(
+      [
+        checkComplianceMatrixTool,
+        checkDataResidencyTool,
+        checkRetentionPolicyTool,
+      ],
+      model,
+      rag,
+    ),
     systemPrompt: `你是数据合规与隐私保护专家，专注评估需求的法律合规性和监管风险。
 
 **核心职责**：
@@ -308,7 +374,7 @@ export function createComplianceExpert(model: BaseChatModel) {
 **工具使用策略**：
 - 用 check_compliance_matrix 检查需求涉及的数据类型和行业要求
 - 如涉及跨境数据或特定地区用户，用 check_data_residency 验证数据驻留策略
-- 用 check_retention_policy 确认数据保留时长是否合规
+- 用 check_retention_policy 确认数据保留时长是否合规${rag ? RAG_TOOL_HINT : ''}
 
 **输出必需章节（使用 Markdown 二级标题）**：
 ## 适用法律法规
@@ -429,7 +495,10 @@ export async function supervisorNode(
  *
  * @param model 外部透传的模型实例，严禁在内部隐式构造
  */
-export function createAnalysisSupervisorSubGraph(model: BaseChatModel) {
+export function createAnalysisSupervisorSubGraph(
+  model: BaseChatModel,
+  rag?: ExpertRagDeps,
+) {
   // aggregator：把选中的专家结论合成 analysis / analysisResult 总输出
   async function aggregatorNode(state: typeof RequirementAnalysisState.State) {
     const parts: string[] = [];
@@ -479,10 +548,12 @@ export function createAnalysisSupervisorSubGraph(model: BaseChatModel) {
   }
 
   // 创建四大专家子图实例
-  const functionalExpert = createFunctionalExpert(model);
+  // RAG 只挂 functional / security / compliance 三家：
+  // 性能专家面对的是基线指标这类结构化数据，文档检索收益低、还会拖长链路
+  const functionalExpert = createFunctionalExpert(model, rag);
   const performanceExpert = createPerformanceExpert(model);
-  const securityExpert = createSecurityExpert(model);
-  const complianceExpert = createComplianceExpert(model);
+  const securityExpert = createSecurityExpert(model, rag);
+  const complianceExpert = createComplianceExpert(model, rag);
 
   return (
     new StateGraph(RequirementAnalysisState)

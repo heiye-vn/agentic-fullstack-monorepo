@@ -10,6 +10,9 @@ import { OrchestratorService } from '../llm/agents/orchestrator.service.js';
 import { UIFlowService } from '../llm/ui-protocol/ui-flow.service.js';
 import type { UIAction } from '../llm/ui-protocol/ui-types.js';
 import { SearchService } from '../document/search.service.js';
+import { EmbeddingService } from '../document/embedding.service.js';
+import { createVectorSearchFn } from '../../rag/retrieval/vector-search-fn.js';
+import type { ExpertRagDeps } from '../llm/graph/experts.js';
 import { ArtifactService } from '../artifact/artifact.service.js';
 import { UIActionParser, type UIContext } from './ui-action.parser.js';
 import { estimateTextTokens, getModelPricing } from '../llm/cost/token-estimator.js';
@@ -62,6 +65,7 @@ export class ChatStreamService {
     private readonly runnableMemoryService: RunnableMemoryService,
     private readonly modelConfigService: ModelConfigService,
     private readonly searchService: SearchService,
+    private readonly embeddingService: EmbeddingService,
     private readonly orchestratorService: OrchestratorService,
     private readonly uiFlowService: UIFlowService,
     private readonly artifactService: ArtifactService,
@@ -291,6 +295,47 @@ export class ChatStreamService {
     const { model, modelName, keySource } =
       await this.resolveChatModel(modelId);
 
+    // ── 第十章预算快照（11.10.5 与 Token 经济学协同） ──────────────
+    // RAG 工具的预算闸门要同步取值，所以在这里先查一次当月累计成本，
+    // 未配置 MONTHLY_BUDGET_USD 时按 0 处理，等价于不做预算拦截
+    let budgetUsedPercent = 0;
+    const monthlyBudgetUsd = Number(process.env.MONTHLY_BUDGET_USD ?? 0);
+    if (monthlyBudgetUsd > 0) {
+      try {
+        const monthStart = new Date(
+          new Date().getFullYear(),
+          new Date().getMonth(),
+          1,
+        );
+        const agg = await this.prisma.tokenUsage.aggregate({
+          _sum: { estimatedCostUsd: true },
+          where: { createdAt: { gte: monthStart } },
+        });
+        budgetUsedPercent =
+          ((agg._sum.estimatedCostUsd ?? 0) / monthlyBudgetUsd) * 100;
+      } catch (budgetErr) {
+        this.logger.warn(
+          `读取月度预算失败，按未超预算处理: ${
+            budgetErr instanceof Error ? budgetErr.message : String(budgetErr)
+          }`,
+        );
+      }
+    }
+
+    // ── 11.10.3 RAG-as-Tool：让专家 Agent 在分析过程中按需检索知识库 ──
+    // 与上面的一次性 retrievedContext 是互补的两条路：
+    // 前者保证首轮就有背景资料，后者允许专家在推理中自己补查规范与历史决策
+    const ragDeps: ExpertRagDeps = {
+      userId,
+      searchFn: createVectorSearchFn({
+        prisma: this.prisma,
+        embedQuery: (t) => this.embeddingService.embedText(t),
+        userId,
+        modelName: this.embeddingService.getModelName(),
+      }),
+      getBudget: () => ({ usedPercent: budgetUsedPercent }),
+    };
+
     // ── 编排管道流式输出 ────────────────────────────────────────
     let content = '';
     let firstChunk = true;
@@ -301,6 +346,7 @@ export class ChatStreamService {
       const stream = this.orchestratorService.streamOrchestrate(text, {
         retrievedContext,
         model,
+        rag: ragDeps,
       });
 
       for await (const event of stream) {

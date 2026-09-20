@@ -30,6 +30,7 @@ import {
   checkConflictsTool,
 } from '../tools/business.tools.js';
 import { createAnalysisSupervisorSubGraph } from './experts.js';
+import type { ExpertRagDeps } from './experts.js';
 
 export {
   analysisTools,
@@ -37,6 +38,7 @@ export {
   checkConflictsTool,
   createAnalysisSupervisorSubGraph,
 };
+export type { ExpertRagDeps };
 
 /**
  * 意图分类 Zod Schema
@@ -1241,6 +1243,11 @@ export interface AnalysisGraphOptions {
   checkpointer?: BaseCheckpointSaver;
   /** 9.6.2 HITL 中断节点列表（在指定节点执行前中断暂停，如 ['clarifyStep']） */
   interruptBefore?: string[];
+  /**
+   * 11.10.3 RAG-as-Tool 依赖。传入后专家 Agent 具备按需检索知识库的能力；
+   * 不传则维持第九章纯业务工具行为
+   */
+  rag?: ExpertRagDeps;
 }
 
 /**
@@ -1279,7 +1286,7 @@ export function createAnalysisGraph(
   // 9.2: 若显式开启 useMultiAgent 且提供 model，则升级为 Supervisor + 4 专家架构；默认保留原单 Agent 子图
   const analysisSubGraph =
     options?.useMultiAgent && model
-      ? createAnalysisSupervisorSubGraph(model)
+      ? createAnalysisSupervisorSubGraph(model, options?.rag)
       : createAnalysisSubGraph(options);
   const summarySubGraph = createSummarySubGraph(options);
   const builder = new StateGraph(RequirementAnalysisState);

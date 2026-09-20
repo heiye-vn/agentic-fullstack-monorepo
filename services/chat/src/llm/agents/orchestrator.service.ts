@@ -15,6 +15,7 @@ import type {
   CardComponent,
   UIResponse,
 } from '../ui-protocol/ui-types.js';
+import type { ExpertRagDeps } from '../graph/experts.js';
 
 export interface ToUIResponseOptions {
   isInterrupted?: boolean;
@@ -557,6 +558,8 @@ export class OrchestratorService {
       retrievedContext?: string;
       model?: any;
       useMultiAgent?: boolean;
+      /** 11.10.3 RAG-as-Tool 依赖，传入后专家可按需检索知识库 */
+      rag?: ExpertRagDeps;
     },
   ): AsyncGenerator<OrchestratorStreamEvent> {
     let currentStep = 0;
@@ -607,6 +610,7 @@ export class OrchestratorService {
         model: options?.model,
         useMultiAgent: options?.useMultiAgent ?? true,
         useTriage: true,
+        rag: options?.rag,
       },
     );
 
