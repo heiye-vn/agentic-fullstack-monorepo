@@ -199,6 +199,57 @@ export function withRagTool(
 const RAG_TOOL_HINT = `
 - 需要确认企业内部规范、历史决策、产品文档时，用 ${RAG_TOOL_NAME} 检索知识库；回答里保留它给出的引用来源`;
 
+// ============================================================
+// 2.0 第十二章 12.13 — MCP 工具挂载
+// ============================================================
+
+/**
+ * 12.13 挂载 MCP 工具所需的依赖
+ *
+ * MCP 工具来自外部 Server（第十二章的 requirement-analyzer / web-search），
+ * 与 RAG 一样做成可选依赖：不传就是第九章的纯本地工具行为。
+ */
+export interface ExpertMcpDeps {
+  /** 已桥接好的 MCP 工具列表（MCPManager.getTools()） */
+  tools?: any[];
+  /** 本次意图，用于按意图裁剪工具，避免上下文膨胀（12.15） */
+  intent?: string;
+}
+
+/**
+ * 按前缀挑选 MCP 工具
+ *
+ * 不同专家只拿自己用得上的工具：
+ * - 功能专家拿 req_*（需求分析）+ ws_*（竞品/最佳实践调研）
+ * - 性能专家只拿 ws_*（查同类技术方案的工期与风险）
+ * 工具描述是要进 system prompt 的，少一个无关工具就少一份 token 开销。
+ */
+export function pickMcpTools(
+  mcp: ExpertMcpDeps | undefined,
+  prefixes: string[],
+): any[] {
+  if (!mcp?.tools?.length) return [];
+  return mcp.tools.filter((t: any) =>
+    prefixes.some((p) => String(t?.name ?? '').startsWith(p)),
+  );
+}
+
+/** 按需把 MCP 工具追加到专家工具列表（导出以便单测挂载开关） */
+export function withMcpTools(
+  tools: any[],
+  mcp: ExpertMcpDeps | undefined,
+  prefixes: string[],
+): any[] {
+  const picked = pickMcpTools(mcp, prefixes);
+  return picked.length > 0 ? [...tools, ...picked] : tools;
+}
+
+/** 挂载 MCP 后追加到 system prompt 的使用提示 */
+const MCP_TOOL_HINT = `
+- 需要量化评估需求完整度时用 req_analyze_completeness；需要估算工期与复杂度时用 req_estimate_complexity
+- 需要参考业界做法时用 ws_search_best_practices / ws_search_competitors / ws_search_tech_stack
+- 外部工具不可用时会返回错误信息，此时改用已有信息继续分析，并在结论里说明该项未取得外部数据`;
+
 /**
  * 2.1 功能分析专家 (Functional Expert)
  * 职责：功能拆解、用户交互流程、功能依赖与架构冲突检测
@@ -206,15 +257,21 @@ const RAG_TOOL_HINT = `
 export function createFunctionalExpert(
   model: BaseChatModel,
   rag?: ExpertRagDeps,
+  mcp?: ExpertMcpDeps,
 ) {
+  const baseTools = withRagTool(
+    [searchRequirementTool, checkConflictsTool, readFeatureSpecTool],
+    model,
+    rag,
+  );
   return createExpertSubGraph({
     name: 'functional',
     model,
-    tools: withRagTool(
-      [searchRequirementTool, checkConflictsTool, readFeatureSpecTool],
-      model,
-      rag,
-    ),
+    tools: withMcpTools(baseTools, mcp, [
+      'req_',
+      'ws_',
+      'search_knowledge_base',
+    ]),
     systemPrompt: `你是功能需求分析专家，专注评估需求的功能完整性、交互合理性和系统兼容性。
 
 **核心职责**：
@@ -242,7 +299,9 @@ export function createFunctionalExpert(
 
 ## 冲突与重叠分析
 - 明确指出与现有功能的冲突（如有）
-- 提供解决方案或替代设计` + (rag ? RAG_TOOL_HINT : ''),
+- 提供解决方案或替代设计` +
+    (rag ? RAG_TOOL_HINT : '') +
+    (mcp ? MCP_TOOL_HINT : ''),
     outputField: 'functionalAnalysis',
   });
 }
@@ -251,11 +310,18 @@ export function createFunctionalExpert(
  * 2.2 性能分析专家 (Performance Expert)
  * 职责：负载评估、响应时延/吞吐量预估、瓶颈识别与性能预算校验
  */
-export function createPerformanceExpert(model: BaseChatModel) {
+export function createPerformanceExpert(
+  model: BaseChatModel,
+  mcp?: ExpertMcpDeps,
+) {
   return createExpertSubGraph({
     name: 'performance',
     model,
-    tools: [loadPerfBaselineTool, checkPerfBudgetTool],
+    tools: withMcpTools(
+      [loadPerfBaselineTool, checkPerfBudgetTool],
+      mcp,
+      ['ws_'],
+    ),
     systemPrompt: `你是系统性能分析专家，专注评估需求对系统吞吐、延迟、资源占用的影响。
 
 **核心职责**：
@@ -287,7 +353,7 @@ export function createPerformanceExpert(model: BaseChatModel) {
 
 ## 优化建议
 - 架构层面优化（如异步处理、队列、缓存）
-- 具体实施建议（限流、分片、索引等）`,
+- 具体实施建议（限流、分片、索引等）` + (mcp ? MCP_TOOL_HINT : ''),
     outputField: 'performanceAnalysis',
   });
 }
@@ -498,6 +564,7 @@ export async function supervisorNode(
 export function createAnalysisSupervisorSubGraph(
   model: BaseChatModel,
   rag?: ExpertRagDeps,
+  mcp?: ExpertMcpDeps,
 ) {
   // aggregator：把选中的专家结论合成 analysis / analysisResult 总输出
   async function aggregatorNode(state: typeof RequirementAnalysisState.State) {
@@ -550,8 +617,8 @@ export function createAnalysisSupervisorSubGraph(
   // 创建四大专家子图实例
   // RAG 只挂 functional / security / compliance 三家：
   // 性能专家面对的是基线指标这类结构化数据，文档检索收益低、还会拖长链路
-  const functionalExpert = createFunctionalExpert(model, rag);
-  const performanceExpert = createPerformanceExpert(model);
+  const functionalExpert = createFunctionalExpert(model, rag, mcp);
+  const performanceExpert = createPerformanceExpert(model, mcp);
   const securityExpert = createSecurityExpert(model, rag);
   const complianceExpert = createComplianceExpert(model, rag);
 

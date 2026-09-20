@@ -12,7 +12,8 @@ import type { UIAction } from '../llm/ui-protocol/ui-types.js';
 import { SearchService } from '../document/search.service.js';
 import { EmbeddingService } from '../document/embedding.service.js';
 import { createVectorSearchFn } from '../../rag/retrieval/vector-search-fn.js';
-import type { ExpertRagDeps } from '../llm/graph/experts.js';
+import type { ExpertRagDeps, ExpertMcpDeps } from '../llm/graph/experts.js';
+import { getSharedMcpManager } from '../mcp/mcp-runtime.js';
 import { ArtifactService } from '../artifact/artifact.service.js';
 import { UIActionParser, type UIContext } from './ui-action.parser.js';
 import { estimateTextTokens, getModelPricing } from '../llm/cost/token-estimator.js';
@@ -336,6 +337,14 @@ export class ChatStreamService {
       getBudget: () => ({ usedPercent: budgetUsedPercent }),
     };
 
+    // ── 12.13 MCP：让专家 Agent 在分析过程中调用外部 MCP Server ──
+    // 未开启 MCP_ENABLED 时 getSharedMcpManager 返回 null，
+    // 专家工具池保持第九章原样，行为完全不变
+    const mcpManager = await getSharedMcpManager();
+    const mcpDeps: ExpertMcpDeps | undefined = mcpManager
+      ? { tools: mcpManager.getTools() }
+      : undefined;
+
     // ── 编排管道流式输出 ────────────────────────────────────────
     let content = '';
     let firstChunk = true;
@@ -347,6 +356,7 @@ export class ChatStreamService {
         retrievedContext,
         model,
         rag: ragDeps,
+        mcp: mcpDeps,
       });
 
       for await (const event of stream) {

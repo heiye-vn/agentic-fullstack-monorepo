@@ -30,7 +30,7 @@ import {
   checkConflictsTool,
 } from '../tools/business.tools.js';
 import { createAnalysisSupervisorSubGraph } from './experts.js';
-import type { ExpertRagDeps } from './experts.js';
+import type { ExpertRagDeps, ExpertMcpDeps } from './experts.js';
 
 export {
   analysisTools,
@@ -38,7 +38,7 @@ export {
   checkConflictsTool,
   createAnalysisSupervisorSubGraph,
 };
-export type { ExpertRagDeps };
+export type { ExpertRagDeps, ExpertMcpDeps };
 
 /**
  * 意图分类 Zod Schema
@@ -1248,6 +1248,11 @@ export interface AnalysisGraphOptions {
    * 不传则维持第九章纯业务工具行为
    */
   rag?: ExpertRagDeps;
+  /**
+   * 12.13 MCP 工具依赖。传入后专家 Agent 具备调用外部 MCP Server 的能力；
+   * 不传则维持第九章纯本地工具行为
+   */
+  mcp?: ExpertMcpDeps;
 }
 
 /**
@@ -1286,7 +1291,7 @@ export function createAnalysisGraph(
   // 9.2: 若显式开启 useMultiAgent 且提供 model，则升级为 Supervisor + 4 专家架构；默认保留原单 Agent 子图
   const analysisSubGraph =
     options?.useMultiAgent && model
-      ? createAnalysisSupervisorSubGraph(model, options?.rag)
+      ? createAnalysisSupervisorSubGraph(model, options?.rag, options?.mcp)
       : createAnalysisSubGraph(options);
   const summarySubGraph = createSummarySubGraph(options);
   const builder = new StateGraph(RequirementAnalysisState);
