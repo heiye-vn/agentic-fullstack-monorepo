@@ -12,8 +12,14 @@ import type { UIAction } from '../llm/ui-protocol/ui-types.js';
 import { SearchService } from '../document/search.service.js';
 import { EmbeddingService } from '../document/embedding.service.js';
 import { createVectorSearchFn } from '../rag/retrieval/vector-search-fn.js';
-import type { ExpertRagDeps, ExpertMcpDeps } from '../llm/graph/experts.js';
+import type {
+  ExpertRagDeps,
+  ExpertMcpDeps,
+  ExpertSkillDeps,
+} from '../llm/graph/experts.js';
 import { getSharedMcpManager } from '../mcp/mcp-runtime.js';
+import { buildSkillToolSet, getSharedSkillRuntime } from '../skills/skills-runtime.js';
+import type { SkillTraceCollector } from '../skills/skill-trace.js';
 import { ArtifactService } from '../artifact/artifact.service.js';
 import { UIActionParser, type UIContext } from './ui-action.parser.js';
 import { estimateTextTokens, getModelPricing } from '../llm/cost/token-estimator.js';
@@ -345,6 +351,32 @@ export class ChatStreamService {
       ? { tools: mcpManager.getTools() }
       : undefined;
 
+    // ── 13.4 Skills：让功能专家按需加载专业工作流 ──
+    // 与 MCP 不同，Skills 是纯本地资产（读 SKILL.md + 调本地确定性工具），
+    // 没有外部依赖也没有额外成本，所以默认开启，SKILLS_ENABLED=0 可关闭。
+    // 这里把第十二章的 MCP 工具一起传进去：Skill 的 allowed-tools 里
+    // 声明了 req_* / ws_*，同名即命中（教程 13.9.1 —— 工具来源不限）
+    // 注册表扫盘一次即可（getSharedSkillRuntime），工具实例每请求重建，
+    // 这样 trace 能带上本次请求的 requestId —— 共享工具实例会让所有加载都记到第一个请求头上
+    const skillRuntime = getSharedSkillRuntime({
+      mcpTools: mcpManager?.getTools(),
+      logger: (m) => this.logger.log(m),
+    });
+    let skillsDeps: ExpertSkillDeps | undefined;
+    let skillTraces: SkillTraceCollector | undefined;
+    if (skillRuntime) {
+      const built = buildSkillToolSet(skillRuntime.registry, {
+        mcpTools: mcpManager?.getTools(),
+        trace: { requestId: messageId, conversationId, userId },
+      });
+      skillTraces = built.traces;
+      skillsDeps = {
+        tools: built.tools,
+        indexPrompt: skillRuntime.indexPrompt,
+        traces: built.traces,
+      };
+    }
+
     // ── 编排管道流式输出 ────────────────────────────────────────
     let content = '';
     let firstChunk = true;
@@ -357,6 +389,7 @@ export class ChatStreamService {
         model,
         rag: ragDeps,
         mcp: mcpDeps,
+        skills: skillsDeps,
       });
 
       for await (const event of stream) {
@@ -545,6 +578,17 @@ export class ChatStreamService {
         overrideReason: null,
       },
     };
+
+    // 13.10.4 Skills 埋点汇总：只记统计量与技能名，不记正文
+    if (skillTraces) {
+      const summary = skillTraces.summary();
+      if (summary.totalLoads > 0) {
+        this.logger.log(
+          `[skills] 会话 ${conversationId} 加载 ${summary.totalLoads} 次，命中率 ${summary.hitRate}，技能：${Object.keys(summary.bySkill).join(', ')}`,
+        );
+      }
+    }
+
     yield { messageType: 'done', payload: null };
   }
 

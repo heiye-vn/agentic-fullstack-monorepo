@@ -250,6 +250,41 @@ const MCP_TOOL_HINT = `
 - 需要参考业界做法时用 ws_search_best_practices / ws_search_competitors / ws_search_tech_stack
 - 外部工具不可用时会返回错误信息，此时改用已有信息继续分析，并在结论里说明该项未取得外部数据`;
 
+// ============================================================
+// 2.0.1 第十三章 13.4 — Skills 挂载
+// ============================================================
+
+/**
+ * 13.4 挂载 Skills 所需的依赖
+ *
+ * 与 RAG / MCP 一样做成可选依赖：不传就是第九章 + 第十二章的原有行为。
+ *
+ * `indexPrompt` 是 L1（各 Skill 的 name + description），追加到 systemPrompt；
+ * 它等价于 LangChain Custom Pattern 里 createMiddleware 注入的那段内容 ——
+ * 本项目用 LangGraph StateGraph，没有 middleware 钩子，所以在装配阶段拼进 prompt。
+ * L2（SKILL.md 正文）由 Agent 用 load_skill 主动加载，不预先占用上下文。
+ */
+export interface ExpertSkillDeps {
+  /** 已装配好的 Skill 工具集（load_skill + 本地工具 + 命中的 MCP 工具） */
+  tools?: any[];
+  /** L1 索引 */
+  indexPrompt?: string;
+  /** 本次请求的加载埋点，请求结束后由调用方汇总（13.10.4） */
+  traces?: any;
+}
+
+/** 按需把 Skill 工具追加到专家工具列表（导出以便单测挂载开关） */
+export function withSkillTools(tools: any[], skills?: ExpertSkillDeps): any[] {
+  if (!skills?.tools?.length) return tools;
+  return [...tools, ...skills.tools];
+}
+
+/** 把 L1 索引拼进 system prompt（等价于 createMiddleware 的 wrapModelCall 注入） */
+export function buildSkillPromptAddendum(skills?: ExpertSkillDeps): string {
+  if (!skills?.indexPrompt) return '';
+  return `\n\n${skills.indexPrompt}`;
+}
+
 /**
  * 2.1 功能分析专家 (Functional Expert)
  * 职责：功能拆解、用户交互流程、功能依赖与架构冲突检测
@@ -258,6 +293,7 @@ export function createFunctionalExpert(
   model: BaseChatModel,
   rag?: ExpertRagDeps,
   mcp?: ExpertMcpDeps,
+  skills?: ExpertSkillDeps,
 ) {
   const baseTools = withRagTool(
     [searchRequirementTool, checkConflictsTool, readFeatureSpecTool],
@@ -267,11 +303,14 @@ export function createFunctionalExpert(
   return createExpertSubGraph({
     name: 'functional',
     model,
-    tools: withMcpTools(baseTools, mcp, [
-      'req_',
-      'ws_',
-      'search_knowledge_base',
-    ]),
+    tools: withSkillTools(
+      withMcpTools(baseTools, mcp, [
+        'req_',
+        'ws_',
+        'search_knowledge_base',
+      ]),
+      skills,
+    ),
     systemPrompt: `你是功能需求分析专家，专注评估需求的功能完整性、交互合理性和系统兼容性。
 
 **核心职责**：
@@ -301,7 +340,8 @@ export function createFunctionalExpert(
 - 明确指出与现有功能的冲突（如有）
 - 提供解决方案或替代设计` +
     (rag ? RAG_TOOL_HINT : '') +
-    (mcp ? MCP_TOOL_HINT : ''),
+    (mcp ? MCP_TOOL_HINT : '') +
+    buildSkillPromptAddendum(skills),
     outputField: 'functionalAnalysis',
   });
 }
@@ -565,6 +605,7 @@ export function createAnalysisSupervisorSubGraph(
   model: BaseChatModel,
   rag?: ExpertRagDeps,
   mcp?: ExpertMcpDeps,
+  skills?: ExpertSkillDeps,
 ) {
   // aggregator：把选中的专家结论合成 analysis / analysisResult 总输出
   async function aggregatorNode(state: typeof RequirementAnalysisState.State) {
@@ -617,7 +658,9 @@ export function createAnalysisSupervisorSubGraph(
   // 创建四大专家子图实例
   // RAG 只挂 functional / security / compliance 三家：
   // 性能专家面对的是基线指标这类结构化数据，文档检索收益低、还会拖长链路
-  const functionalExpert = createFunctionalExpert(model, rag, mcp);
+  // Skills 只挂功能专家：两个 Skill（需求分析 / 竞品调研）都属于产品侧能力，
+  // 性能与合规专家面对的是结构化基线数据，加载 Skill 只会多一轮工具调用
+  const functionalExpert = createFunctionalExpert(model, rag, mcp, skills);
   const performanceExpert = createPerformanceExpert(model, mcp);
   const securityExpert = createSecurityExpert(model, rag);
   const complianceExpert = createComplianceExpert(model, rag);

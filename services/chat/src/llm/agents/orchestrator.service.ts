@@ -15,7 +15,11 @@ import type {
   CardComponent,
   UIResponse,
 } from '../ui-protocol/ui-types.js';
-import type { ExpertRagDeps, ExpertMcpDeps } from '../graph/experts.js';
+import type {
+  ExpertRagDeps,
+  ExpertMcpDeps,
+  ExpertSkillDeps,
+} from '../graph/experts.js';
 
 export interface ToUIResponseOptions {
   isInterrupted?: boolean;
@@ -562,6 +566,8 @@ export class OrchestratorService {
       rag?: ExpertRagDeps;
       /** 12.13 MCP 工具依赖，传入后专家可调用外部 MCP Server */
       mcp?: ExpertMcpDeps;
+      /** 13.4 Skills 依赖，传入后功能专家可加载 Skill 并使用其自带工具 */
+      skills?: ExpertSkillDeps;
     },
   ): AsyncGenerator<OrchestratorStreamEvent> {
     let currentStep = 0;
@@ -614,6 +620,7 @@ export class OrchestratorService {
         useTriage: true,
         rag: options?.rag,
         mcp: options?.mcp,
+        skills: options?.skills,
       },
     );
 
