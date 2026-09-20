@@ -4,6 +4,12 @@
   "sourceRoot": "src",
   "entryFile": "main.js",
   "compilerOptions": {
-    "deleteOutDir": true
+    "deleteOutDir": true,
+    "assets": [
+      {
+        "include": "skills/definitions/**/*.md",
+        "watchAssets": true
+      }
+    ]
   }
 }
