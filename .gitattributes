@@ -1,0 +1,5 @@
+# Skill 资产必须保持 LF 行尾。
+# 原因：deepagents 解析 SKILL.md 的 YAML frontmatter 时，CRLF 里的 \r 会让 yaml.parse
+# 在最后一个字段处报错（"Unexpected scalar at node end"），listSkills 随即静默返回空数组。
+# 本机 core.autocrlf=true 会把工作副本转回 CRLF，这里显式锁住这两个文件。
+services/chat/src/skills/definitions/**/SKILL.md text eol=lf
