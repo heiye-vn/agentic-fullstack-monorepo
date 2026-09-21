@@ -30,13 +30,13 @@ config({ path: join(SERVICE_ROOT, '.env') });
 /**
  * 构造 DeepAgent 主模型。
  *
- * 默认取项目 strong 档位 qwen3.8-max：DeepAgent 依赖稳定的 tool calling
- * （write_todos / write_file / task），弱档位容易漏调用工具。
- * 需要换档时用 DEEPAGENT_MODEL 覆盖。
+ * 默认取 weak 档位 qwen3.7-flash-2026-07-15（strong 档 qwen3.8-max 免费额度已耗尽）。
+ * 弱档位 tool calling 不如强档稳定，write_todos 更难触发属正常现象；
+ * 需要更强规划能力时用 DEEPAGENT_MODEL 覆盖。
  */
 export function buildDeepAgentModel(): ChatOpenAI {
   return new ChatOpenAI({
-    model: process.env.DEEPAGENT_MODEL || 'qwen3.8-max',
+    model: process.env.DEEPAGENT_MODEL || 'qwen3.7-flash-2026-07-15',
     temperature: 0,
     configuration: { baseURL: process.env.OPENAI_BASE_URL },
   });

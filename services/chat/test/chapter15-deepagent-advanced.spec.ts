@@ -32,7 +32,7 @@ import {
   extractLatestUserText,
 } from '../src/llm/deepagent/deep-orchestrator.service.js';
 
-const DEEPAGENT_MODEL = process.env.DEEPAGENT_MODEL || 'qwen3.8-max';
+const DEEPAGENT_MODEL = process.env.DEEPAGENT_MODEL || 'qwen3.7-flash-2026-07-15';
 const RUN_LLM = process.env.RUN_LLM_DEEPAGENT_TESTS === '1';
 
 function makeStubModel() {

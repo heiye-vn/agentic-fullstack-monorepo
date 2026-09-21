@@ -8,7 +8,7 @@
  * 与参考项目（autix-demo feat/deepagents）的三点差异：
  * 1. 业务工具用第十三章的 TypeScript 实现（createSkillTools），不 execSync 调 Python
  * 2. 测试框架是 vitest，不是 bun:test；LLM 用例用 RUN_LLM_DEEPAGENT_TESTS 门控
- * 3. 默认值以项目可用档位为准（DEEPAGENT_MODEL，缺省 qwen3.8-max）
+ * 3. 默认值以项目可用档位为准（DEEPAGENT_MODEL，缺省 qwen3.7-flash-2026-07-15）
  *
  * 分层：Layer 1 零 LLM、必须全绿；Layer 2 需要 OPENAI_API_KEY + RUN_LLM_DEEPAGENT_TESTS=1。
  */
@@ -31,7 +31,7 @@ import { resolveSkillsDir } from '../src/skills/skills-runtime.js';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL;
-const DEEPAGENT_MODEL = process.env.DEEPAGENT_MODEL || 'qwen3.8-max';
+const DEEPAGENT_MODEL = process.env.DEEPAGENT_MODEL || 'qwen3.7-flash-2026-07-15';
 const RUN_LLM = process.env.RUN_LLM_DEEPAGENT_TESTS === '1';
 const SKILLS_DIR = resolveSkillsDir();
 
