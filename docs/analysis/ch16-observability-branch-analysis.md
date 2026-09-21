@@ -157,3 +157,51 @@ src/llm/graph/studio.ts:15                    createAnalysisGraph(model)        
 - **opt-in 用额外可选参数** 而非修改必填签名：向后兼容，旧测试零改动通过
 - **liveness / readiness 分离**：`health` 永远 true 不是 bug 而是职责不同，新增 `/ready` 而不是改 health 语义
 - **`16.10.3` 明确声明「本地可跑 vs 外部基建」边界**：诚实，避免了「加了 prom-client 就等于有监控」的误解
+
+---
+
+## 六、移植落地结果对照（2026-09-21）
+
+目标分支 `chapter-16-observability`，提交 `68e341f`（26 文件）。上游参照提交为 autix 的 `f4201c0`（19 文件）。
+逐文件对照如下，**结论：功能已全部覆盖，"未搬" 的三项各有明确理由。**
+
+| autix `f4201c0` 改动的文件 | 目标项目处理 | 说明 |
+|---|---|---|
+| `observability/trace-context.ts` | ✅ 搬（并加 `peekTraceStore()`） | 新增 peek 是为让中间件把 store 引用捕获下来，不赌 ALS 能传播到 `res.on('finish')` |
+| `observability/logger.ts` | ✅ 搬 | redact 刻意**不写 `token`**，否则 token 计数会被一起抹掉 |
+| `observability/metrics.ts` | ✅ 搬 + 增强 | 增加 `llm_node_duration_seconds`、`normalizeRoute()`（防 label 高基数） |
+| `observability/llm-tracer.ts` | ✅ 搬 | 多一个可插拔 `usageSink` 出口，用于接第十章已有的 `TokenUsageService` |
+| `observability/trace.middleware.ts` | ✅ 搬 + 改 | SSE 走独立直方图，不混进 `httpDuration` |
+| `app.controller.ts`（/metrics、/ready） | ✅ 搬 | 另加 `RAW_RESPONSE_PATHS` 放行，见下行 |
+| `app.service.ts`（getReadiness） | ✅ 搬 | 真跑 `SELECT 1`，未就绪 503 |
+| `app.module.ts`（注册中间件） | ✅ 搬 | `forRoutes('*')` |
+| `common/all-exceptions.filter.ts` | ✅ 搬 | 目标路径在 `common/filters/`；改为优先复用 header 里的 traceId |
+| `common/response.interceptor.ts` | ✅ 搬 + 修 bug | **上游存在「`/metrics` 被包成 JSON」的静默失效**，目标项目已修 |
+| `llm/llm.module.ts` | ✅ 搬 | `useFactory` 提供并导出 `TokenUsageService` |
+| `llm/graph/requirement-analysis-graph.ts` | ⚠️ 用替代方案 | 不逐节点包 `wrapNodeUsage`，改为在 `createChatModel` 挂回调（见下）；仅补 `setGraphName()` |
+| `llm/graph/experts.ts` | ⚠️ 用替代方案 | 上游把 `obs` 参数一路透传进 4 个专家工厂；回调方案无需改此文件 |
+| `llm/cost/with-token-usage.ts` | ➖ 无需改 | 上游修的「先读 `usage_metadata`」目标项目**本来就是对的** |
+| `llm/cost/cost.controller.ts`（`GET /api/cost/summary`） | ✅ 已补搬 | 首次移植时遗漏，2026-09-21 补上（含守卫元数据测试） |
+| `scripts/run-observability-demo.ts` | ✅ 搬 | |
+| `test/chapter16-observability.spec.ts` | ✅ 搬 + 扩 | 34 项（上游为 Layer1+Layer2） |
+| `bun.lock` | ➖ 不适用 | 目标项目用 pnpm |
+| （上游独有的硬编码调试 fetch 块清理） | ➖ 无需处理 | 那是 autix 自己的 Cursor 调试残留（`127.0.0.1:7439`），目标项目从未有过 |
+
+### 为什么用「模型工厂回调」替代「逐节点 wrapNodeUsage」
+
+上游需要在 4 个顶层节点 + 2 个子图 + 4 个专家工厂里逐处接线，且实测仍漏采主链四步。
+目标项目改为在 `createChatModel()` 产出的实例上挂 `callbacks: [getLlmTracer()]`：
+
+- LangChain 每次调用执行 `CallbackManager.configure(config.callbacks, this.callbacks, …)`，
+  **构造期回调会与调用期合并且不重复**，所以图节点、并行专家、Critic-Refine 循环、ReAct 工具轮次全覆盖；
+- LangGraph 会把 `metadata.langgraph_node` 注入节点内部，节点名自动带出，无需手工传 `nodeName`；
+- 代价：无法像 `withTokenUsage` 那样拿到「包裹函数的返回值」做兜底估算，改为在回调里按
+  流式增量累计输出 token 估算值。两条路径并存，报表侧一律靠 `isEstimated` 区分。
+
+### 与上游的三处有意分歧
+
+1. **不复制 opt-in 默认关闭**：上游把指标/落库做成默认 off，生产链路会恒为 0。目标项目直接接线，
+   env 只作为排障时的关闭手段（`OBS_USAGE_PERSIST=0` 仅关落库，指标照出）。
+2. **`sse_active_connections` 真接线**：上游只声明未使用，目标项目按连接集合实际大小 `set()`。
+3. **修掉 `/metrics` 被响应拦截器包装的静默失效**：上游未处理该路径（其响应拦截器结构不同）。
+

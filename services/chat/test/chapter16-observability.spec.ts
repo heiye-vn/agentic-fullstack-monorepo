@@ -22,6 +22,7 @@
  *   npx vitest run test/chapter16-observability.spec.ts
  *   RUN_LLM_OBS_TESTS=1 npx vitest run test/chapter16-observability.spec.ts
  */
+import 'reflect-metadata';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   Controller,
@@ -57,6 +58,7 @@ import {
 import { TraceMiddleware } from '../src/observability/trace.middleware.js';
 import { createChatModel } from '../src/llm/model.factory.js';
 import type { TokenUsageRecord } from '../src/llm/cost/token-usage.service.js';
+import { CostController } from '../src/llm/cost/cost.controller.js';
 
 const RUN_LLM_OBS_TESTS = process.env.RUN_LLM_OBS_TESTS === '1';
 const OBS_TEST_MODEL = process.env.LLM_OBS_TEST_MODEL || 'qwen3.7-flash-2026-07-15';
@@ -622,4 +624,69 @@ describe('16.4 真实调用端到端（Layer 2）', () => {
     },
     180_000,
   );
+});
+
+// ============================================================================
+// 16.4.3 成本查询端点：GET /api/cost/summary
+// ============================================================================
+
+describe('16.4.3 /api/cost/summary 成本查询', () => {
+  /**
+   * 三个聚合查询的最小替身。顺带用「在途计数」探针记录并发峰值：
+   * 若控制器写成了串行 await，峰值只会是 1；并行发出才会达到 3。
+   */
+  function makeUsage() {
+    let inFlight = 0;
+    let peakInFlight = 0;
+
+    const probe = <T>(value: T) =>
+      vi.fn(async () => {
+        inFlight += 1;
+        peakInFlight = Math.max(peakInFlight, inFlight);
+        await new Promise((r) => setTimeout(r, 5));
+        inFlight -= 1;
+        return value;
+      });
+
+    const usage = {
+      getMonthlyStats: probe({
+        totalCost: 1.23,
+        totalInputTokens: 1000,
+        totalOutputTokens: 500,
+        totalCachedTokens: 0,
+        calls: 7,
+      }),
+      getStatsByNode: probe([
+        { nodeName: 'analysisStep', totalCost: 0.9, calls: 5, avgInputTokens: 180 },
+      ]),
+      getStatsByAgent: probe([{ agentName: 'functional', totalCost: 0.9, calls: 5 }]),
+      peakInFlight: () => peakInFlight,
+    };
+    return usage;
+  }
+
+  it('汇总总账 + 按节点 + 按 Agent 三张表，且三个查询并行发出', async () => {
+    const usage = makeUsage();
+    const controller = new CostController(usage as never);
+
+    const result = await controller.summary();
+
+    expect(result.monthly.calls).toBe(7);
+    expect(result.byNode[0].nodeName).toBe('analysisStep');
+    expect(result.byAgent[0].agentName).toBe('functional');
+
+    // 三张表都必须被取到（漏掉任何一张，前端就拿不到完整成本视图）
+    expect(usage.getMonthlyStats).toHaveBeenCalledTimes(1);
+    expect(usage.getStatsByNode).toHaveBeenCalledTimes(1);
+    expect(usage.getStatsByAgent).toHaveBeenCalledTimes(1);
+    // 峰值 3 证明是 Promise.all 并行，而不是串行 await 白等两轮
+    expect(usage.peakInFlight()).toBe(3);
+  });
+
+  it('必须在 JwtAuthGuard 之下 —— 成本数据不能裸奔', () => {
+    // 用 Nest 的守卫元数据锁定这一约束，避免后续重构顺手删掉 @UseGuards
+    const guards: unknown[] =
+      Reflect.getMetadata('__guards__', CostController) ?? [];
+    expect(guards.length).toBeGreaterThan(0);
+  });
 });

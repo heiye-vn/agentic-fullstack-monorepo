@@ -3,10 +3,11 @@ import { LlmController } from './llm.controller.js';
 import { LlmService } from './llm.service.js';
 import { RequirementService } from './requirement.service.js';
 import { TokenUsageService } from './cost/token-usage.service.js';
+import { CostController } from './cost/cost.controller.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 @Module({
-  controllers: [LlmController],
+  controllers: [LlmController, CostController],
   providers: [
     LlmService,
     RequirementService,
