@@ -37,6 +37,9 @@ describe('AllExceptionsFilter Unit Tests', () => {
       setHeader: vi.fn((name: string, value: string) => {
         mockResponse.headers[name.toLowerCase()] = value;
       }),
+      // 第十六章：过滤器会先探测 x-trace-id 是否已由 TraceMiddleware 写入，
+      // 真实 Express Response 具备 getHeader，这里补齐以忠实模拟其 API 面。
+      getHeader: vi.fn((name: string) => mockResponse.headers[name.toLowerCase()]),
     };
 
     mockHost = {
@@ -64,6 +67,19 @@ describe('AllExceptionsFilter Unit Tests', () => {
     expect(mockResponse.setHeader).toHaveBeenCalledWith(
       'x-trace-id',
       expect.any(String),
+    );
+  });
+
+  it('若 x-trace-id 已由 TraceMiddleware 写入，过滤器不得覆盖它', () => {
+    mockResponse.headers['x-trace-id'] = 'upstream-trace';
+    const exception = new NotFoundException('指定资源不存在');
+
+    filter.catch(exception, mockHost);
+
+    // 已是同源 traceId，过滤器的写入分支应被短路掉
+    expect(mockResponse.setHeader).not.toHaveBeenCalled();
+    expect(mockResponse.json).toHaveBeenCalledWith(
+      expect.objectContaining({ traceId: 'upstream-trace' }),
     );
   });
 

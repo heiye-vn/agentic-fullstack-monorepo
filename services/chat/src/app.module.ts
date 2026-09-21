@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, type MiddlewareConsumer, type NestModule } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { JwtModule } from '@nestjs/jwt';
 import { AppController } from './app.controller.js';
@@ -13,6 +13,7 @@ import { DocumentModule } from './document/document.module.js';
 import { SseModule } from './sse/sse.module.js';
 import { ArtifactModule } from './artifact/artifact.module.js';
 import { ModelConfigModule } from './model-config/model-config.module.js';
+import { TraceMiddleware, UsageSinkBootstrap } from './observability/index.js';
 
 @Module({
   imports: [
@@ -35,6 +36,14 @@ import { ModelConfigModule } from './model-config/model-config.module.js';
     ModelConfigModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, UsageSinkBootstrap],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  /**
+   * 第十六章：在请求入口建立 traceId 上下文（ALS），让同一次请求的
+   * HTTP access 日志、LangGraph 节点日志、LLM 调用日志共用同一个 traceId。
+   */
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(TraceMiddleware).forRoutes('*');
+  }
+}

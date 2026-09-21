@@ -8,6 +8,9 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import type { ApiResponse } from '@autix/types';
+import { createLogger, getTraceId } from '../../observability/index.js';
+
+const errorLog = createLogger('exception');
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -82,9 +85,29 @@ export class AllExceptionsFilter implements ExceptionFilter {
         code = 'INTERNAL_ERROR';
     }
 
-    const traceId =
-      (request.headers['x-trace-id'] as string) || crypto.randomUUID();
-    response.setHeader('x-trace-id', traceId);
+    // 第十六章：traceId 与 access 日志、LLM 日志同源，同一请求只应有一条 trace 链。
+    // TraceMiddleware 通常已在响应头写过 x-trace-id —— 此时直接复用它的值，
+    // 既避免覆盖也更稳（异常可能发生在 ALS 上下文之外，如守卫/过滤器阶段）。
+    // 否则回落到 ALS 上下文（含 'no-trace' 兜底）并补写响应头。
+    const headerTraceId = response.getHeader('x-trace-id');
+    const hasHeaderTraceId =
+      typeof headerTraceId === 'string' && headerTraceId.length > 0;
+    const traceId = hasHeaderTraceId ? headerTraceId : getTraceId();
+    if (!hasHeaderTraceId) {
+      response.setHeader('x-trace-id', traceId);
+    }
+
+    errorLog.error(
+      {
+        status,
+        code,
+        method: request.method,
+        path: request.path,
+        // 只记截断后的错误摘要：完整 stack / message 可能夹带用户输入原文
+        err: String(exception).slice(0, 300),
+      },
+      'unhandled_exception',
+    );
 
     const errorResponse: ApiResponse<null> = {
       success: false,

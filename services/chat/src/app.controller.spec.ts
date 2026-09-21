@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
+import { PrismaService } from './prisma/prisma.service.js';
 import { RequirementService } from './llm/requirement.service.js';
 import { APP_NAME, type RequirementResult } from '@autix/contracts';
 import { vi } from 'vitest';
@@ -14,6 +15,11 @@ describe('AppController', () => {
       controllers: [AppController],
       providers: [
         AppService,
+        {
+          // AppService 现在要探 DB 才能给出 readiness（第十六章）
+          provide: PrismaService,
+          useValue: { $queryRaw: vi.fn().mockResolvedValue([{ '?column?': 1 }]) },
+        },
         {
           provide: RequirementService,
           useValue: {

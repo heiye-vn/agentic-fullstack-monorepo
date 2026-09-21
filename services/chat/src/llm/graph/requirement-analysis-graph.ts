@@ -31,6 +31,7 @@ import {
 } from '../tools/business.tools.js';
 import { createAnalysisSupervisorSubGraph } from './experts.js';
 import type { ExpertRagDeps, ExpertMcpDeps, ExpertSkillDeps } from './experts.js';
+import { setGraphName } from '../../observability/trace-context.js';
 
 export {
   analysisTools,
@@ -1577,6 +1578,10 @@ export async function* streamAnalysisGraph(
   input: AnalysisGraphInput,
   options?: AnalysisGraphOptions,
 ): AsyncGenerator<AnalysisStreamEvent, void, unknown> {
+  // 第十六章：给本轮请求的 ALS 上下文打上图名，
+  // 让 LLM 回调落库时 token_usages.graphName 是真实的图名而不是兜底值
+  setGraphName('requirement-analysis');
+
   // 步骤 1：推送首包启动事件
   yield { type: 'start' };
 

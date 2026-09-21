@@ -23,6 +23,7 @@ import type { SkillTraceCollector } from '../skills/skill-trace.js';
 import { ArtifactService } from '../artifact/artifact.service.js';
 import { UIActionParser, type UIContext } from './ui-action.parser.js';
 import { estimateTextTokens, getModelPricing } from '../llm/cost/token-estimator.js';
+import { setConversationId } from '../observability/trace-context.js';
 
 /**
  * SSE 帧类型（对齐 autix-demo chat-web 的 StreamMessage 协议）
@@ -250,6 +251,11 @@ export class ChatStreamService {
     shouldUpdateTitle?: boolean;
   }): AsyncGenerator<ChatStreamFrame> {
     const { conversationId, userId, text, messageId, modelId } = params;
+
+    // 第十六章：把会话 ID 挂到当前请求的 ALS 上下文里。
+    // token_usages 表没有 traceId 列，排障链是「traceId 定位日志 → 日志里的会话 ID → 查成本表」，
+    // 这一步就是那座桥：此后本轮所有 LLM 回调落库的记录都自带 conversationId。
+    setConversationId(conversationId);
 
     // 先取历史（此时不含本轮），再落库本轮用户消息，避免本轮被重复带入上下文
     const history =

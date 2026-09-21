@@ -4,6 +4,7 @@ import type { Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { EmitTaskEventInput } from './dto/task-event.dto.js';
 import type { TaskEvent } from '../prisma/index.js';
+import { sseConnections } from '../observability/metrics.js';
 
 @Injectable()
 export class SseService {
@@ -18,6 +19,20 @@ export class SseService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
+   * 把 Prometheus 的 sse_active_connections 对齐到 Map 的真实状态。
+   *
+   * 刻意不用 inc()/dec()：连接集合在四个地方被改动（注册、主动断开、推送时剔除失效连接、
+   * 定时清理），只要漏掉一处 inc/dec 配对，仪表就会永久漂移。直接按实际集合大小 set() 则天然收敛。
+   */
+  private syncConnectionGauge(): void {
+    let total = 0;
+    for (const set of this.connections.values()) {
+      total += set.size;
+    }
+    sseConnections.set(total);
+  }
+
+  /**
    * 注册用户 SSE 连接
    * @param userId 用户 ID
    * @param res Express Response 对象
@@ -29,6 +44,7 @@ export class SseService {
       this.connections.set(userId, userConnections);
     }
     userConnections.add(res);
+    this.syncConnectionGauge();
 
     this.logger.log(
       `用户 [${userId}] 新增 SSE 连接，当前该用户在线连接数: ${userConnections.size}`,
@@ -44,6 +60,7 @@ export class SseService {
     const userConnections = this.connections.get(userId);
     if (userConnections) {
       userConnections.delete(res);
+      this.syncConnectionGauge();
       this.logger.log(
         `用户 [${userId}] 断开 SSE 连接，剩余连接数: ${userConnections.size}`,
       );
@@ -105,6 +122,7 @@ export class SseService {
       if (userConnections.size === 0) {
         this.connections.delete(userId);
       }
+      this.syncConnectionGauge();
     }
 
     return record;
@@ -129,6 +147,8 @@ export class SseService {
         this.connections.delete(userId);
       }
     }
+
+    this.syncConnectionGauge();
 
     if (removedCount > 0) {
       this.logger.log(

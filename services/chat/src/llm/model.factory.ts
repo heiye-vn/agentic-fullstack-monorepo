@@ -3,6 +3,7 @@ import {
   loadLangChainConfig,
   getApiKeys,
 } from '../config/load-langchain-config.js';
+import { getLlmTracer } from '../observability/index.js';
 
 /**
  * 统一模型工厂
@@ -45,6 +46,12 @@ export function createChatModel(
     ...(overrides?.disableThinking && {
       modelKwargs: { enable_thinking: false },
     }),
+    // 第十六章：把 LLM 观测回调挂在模型实例上。
+    // LangChain 在每次调用时执行 CallbackManager.configure(config.callbacks, this.callbacks, ...)，
+    // 构造期传入的 callbacks 会与调用期的合并，因此图节点、并行专家子图、
+    // Critic-Refine 循环、ReAct 工具轮次里的每一次真实模型调用都会被覆盖，
+    // 无需在十几处调用点各包一层。节点名由 LangGraph 注入的 metadata.langgraph_node 提供。
+    callbacks: [getLlmTracer()],
   });
 }
 
