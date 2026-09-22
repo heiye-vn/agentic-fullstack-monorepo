@@ -1,22 +1,105 @@
+# infra/compose/compose.yaml —— 第十九章：一键拉起完整环境
+#
+# 用法：
+#   cp .env.example .env        # 首次务必做，缺 .env 会让 postgres 密码为空
+#   docker compose up -d
+#   docker compose ps           # 观察 healthcheck 状态
+#
+# 启动顺序由 healthcheck 串联：
+#   postgres 健康 → migrate 跑完退出 → chat 启动并就绪 → chat-web 启动
+# 任何一环失败，后续服务都不会起来。这比 depends_on 的默认行为
+# （只等容器进程启动、不等真正就绪）可靠得多。
+#
+# 注意：postgres 刻意不映射到宿主机端口。本机 5432 通常已被 compose.dev.yaml 的
+# autix-postgres 占用；容器间走 compose 内部网络用 5432 即可。
+# 需要宿主机直连时用 compose.dev.yaml，或临时放开下面注释掉的 ports。
+
 name: autix-monorepo
 
 services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-autix_chat}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 infra/compose/.env 中设置 POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # 用 pg_isready 而不是 tcp 探活：容器进程起来 ≠ PostgreSQL 能接受连接
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-autix_chat}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    # 需要宿主机直连时放开：
+    # ports:
+    #   - "5433:5432"
+
+  qdrant:
+    # 可选依赖：chat 默认走 pgvector，这里保留以便对比两种向量后端
+    image: qdrant/qdrant
+    restart: unless-stopped
+    volumes:
+      - qdrantdata:/qdrant/storage
+    ports:
+      - "6333:6333"
+
+  ragas:
+    # 第十七章的本地 RAGAS 评测服务；容器内端口是 8000（不是 7860）
+    build:
+      context: ./ragas
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+
+  migrate:
+    # 一次性迁移容器（对应 K8s 的 initContainer 语义）：
+    # 跑完 prisma migrate deploy 即退出，由 chat 的 service_completed_successfully 等待。
+    # 这里刻意用 migrate deploy 而不是 migrate dev —— dev 会生成 migration 且可能提示
+    # 重置数据库，共享环境只允许「只前滚、绝不重置」。
+    build:
+      context: ../..
+      dockerfile: infra/compose/Dockerfile.chat
+    command: sh -c "cd /app/services/chat && ./node_modules/.bin/prisma migrate deploy"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-autix_chat}?schema=public
+    restart: "no"
+
   chat:
     build:
       context: ../..
       dockerfile: infra/compose/Dockerfile.chat
-    ports:
-      - "4001:4001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       PORT: "4001"
-      NODE_ENV: "production"
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-autix_chat}?schema=public
+      JWT_SECRET: ${JWT_SECRET:?请在 infra/compose/.env 中设置 JWT_SECRET}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+    ports:
+      - "4001:4001"
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4001/health"]
-      interval: 10s
+      # 打 /ready 而不是 /health：/health 是 liveness（刻意不探依赖），
+      # /ready 才真探数据库、未就绪返回 503，用它才能判断出真正的就绪。
+      test:
+        ["CMD", "node", "-e",
+         "fetch('http://localhost:4001/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 5s
-    restart: unless-stopped
+      start_period: 30s
 
   chat-web:
     build:
@@ -24,12 +107,25 @@ services:
       dockerfile: infra/compose/Dockerfile.web
       args:
         NEXT_PUBLIC_API_BASE_URL: "http://localhost:4001"
-    ports:
-      - "3002:3002"
-    environment:
-      PORT: "3002"
-      NEXT_PUBLIC_API_BASE_URL: "http://localhost:4001"
     depends_on:
       chat:
         condition: service_healthy
+    environment:
+      PORT: "3002"
+      HOSTNAME: "0.0.0.0"
+      NEXT_PUBLIC_API_BASE_URL: "http://localhost:4001"
+    ports:
+      - "3002:3002"
     restart: unless-stopped
+    healthcheck:
+      test:
+        ["CMD", "node", "-e",
+         "fetch('http://localhost:3002/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  pgdata: {}
+  qdrantdata: {}
