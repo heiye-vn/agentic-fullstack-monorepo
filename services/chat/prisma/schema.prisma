@@ -234,3 +234,41 @@ model TokenUsage {
   @@map("token_usages")
 }
 
+// 10. 评测流水线运行快照表（第十七章 17.7）
+//     每次跑 run-eval.ts 落一行：既存档指标，也把当时的 rubric 版本、
+//     judge 模型、git SHA 一起记下来。缺了这些上下文，三个月后看到
+//     「recall 从 0.92 掉到 0.81」根本无从判断是 RAG 退化了还是换了 embedding。
+model EvalRun {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  /** 评测的数据集名（eval/datasets 下的文件名） */
+  datasetName   String   @db.VarChar(100)
+  /** 被测代码版本，由 GIT_SHA 环境变量或 git rev-parse 取得 */
+  gitSha        String?  @db.VarChar(64)
+  /** judge 用的模型名；--no-llm 模式写 "none(--no-llm)"，不要留空 */
+  judgeModel    String   @db.VarChar(100)
+  /** 本次使用的 rubric 版本号，用于解释历史分数为什么不可直接横向比较 */
+  rubricVersion Int?
+  /** 是否只跑了检索指标（未过图、未调 judge） */
+  noLlm         Boolean  @default(false)
+  totalCases    Int
+  /** 执行失败的 case 数；> 0 时整轮门禁直接 fail */
+  failedCases   Int      @default(0)
+  passed        Boolean
+  /** 未通过门禁的具体原因（中文短句），通过时为空数组 */
+  gateReasons   String[] @default([])
+  avgRecall        Float?
+  avgPrecision     Float?
+  avgNdcg          Float?
+  avgMrr           Float?
+  avgJudgeScore    Float?
+  avgIntentCorrect Float?
+  avgFaithfulness  Float?
+  /** 完整报告快照（分桶 + 逐 case 指标），字段够大时用 Json 比拆表划算 */
+  report        Json
+
+  @@index([createdAt])
+  @@index([datasetName, passed])
+  @@map("eval_runs")
+}
+
