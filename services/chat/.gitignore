@@ -59,3 +59,9 @@ pids
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# 评测 runner 产出的报告快照（每次跑都生成新文件，不入库）
+src/eval/reports/
+
+# RAGAS 本地 venv（infra/compose/ragas/run-local.sh 生成）
+infra/compose/ragas/.venv/
