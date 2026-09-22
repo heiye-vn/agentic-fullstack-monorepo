@@ -23,6 +23,7 @@ import {
   checkToolPermission,
   type PermissionContext,
 } from './mcp-security.js';
+import { QuotaTracker, ToolQuotaError } from '../security/tool-runtime.js';
 
 export interface ServerRegistration {
   /** 逻辑 id，用于 trace 归因和按 id 取 client */
@@ -53,6 +54,19 @@ export interface CallToolInput extends PermissionContext, TraceContext {
   args?: Record<string, unknown>;
 }
 
+export interface MCPManagerOptions {
+  /**
+   * 第十八章 18.6.1：工具调用配额护栏。
+   *
+   * 被注入的 Agent 可能陷入"反复调工具"的循环（Denial of Wallet：烧 token、
+   * 打爆下游）。**不传 = 不启用**，保持既有行为不变；生产按会话维度注入一个
+   * 共享的 QuotaTracker，超限时 callTool 直接返回 quota_exceeded 而不是真调。
+   */
+  quota?: QuotaTracker;
+  /** 配额计数维度，默认 'conversation'（按会话），可改成 'user' */
+  quotaScope?: 'conversation' | 'user';
+}
+
 export class MCPManager {
   private clients = new Map<string, MCPClientService>();
   private registrations: ServerRegistration[] = [];
@@ -62,6 +76,18 @@ export class MCPManager {
   private fallbackByName = new Map<string, DynamicStructuredTool>();
   private statuses = new Map<string, ServerStatus>();
   private readonly traces = new MCPTraceCollector();
+  private readonly options: MCPManagerOptions;
+
+  constructor(options: MCPManagerOptions = {}) {
+    this.options = options;
+  }
+
+  /** 配额计数 key：按会话或按用户，两者都没有时退化为全局 */
+  private quotaKeyFor(input: CallToolInput): string {
+    return this.options.quotaScope === 'user'
+      ? (input.userId ?? 'global')
+      : (input.conversationId ?? input.userId ?? 'global');
+  }
 
   register(registration: ServerRegistration): void {
     this.registrations.push(registration);
@@ -240,6 +266,35 @@ export class MCPManager {
         errorMessage: decision.reason,
       });
       return JSON.stringify({ error: 'permission_denied', message: decision.reason });
+    }
+
+    // 第十八章 18.6.1：配额护栏（未注入 quota 时整段跳过，行为与改造前一致）
+    const quota = this.options.quota;
+    if (quota) {
+      const quotaKey = this.quotaKeyFor(input);
+      if (!quota.tryConsume(quotaKey)) {
+        const message = new ToolQuotaError(
+          `本轮工具调用已超配额（key=${quotaKey}，上限 ${quota.limit}）`,
+        ).message;
+        this.traces.add({
+          requestId: input.requestId ?? 'unknown',
+          conversationId: input.conversationId,
+          userId: input.userId,
+          serverId: this.toolOwner.get(toolName) ?? 'unknown',
+          toolName,
+          rawToolName: toolName,
+          inputSize: JSON.stringify(args).length,
+          outputSize: 0,
+          estimatedOutputTokens: 0,
+          startedAt,
+          endedAt: Date.now(),
+          durationMs: Date.now() - startedAt,
+          status: 'denied',
+          attempts: 0,
+          errorMessage: message,
+        });
+        return JSON.stringify({ error: 'quota_exceeded', message });
+      }
     }
 
     const serverId = this.toolOwner.get(toolName);

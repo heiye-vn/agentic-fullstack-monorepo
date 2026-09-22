@@ -22,6 +22,7 @@ import type {
   ResourceContents,
 } from '@modelcontextprotocol/sdk/types.js';
 import { ToolListChangedNotificationSchema } from '@modelcontextprotocol/sdk/types.js';
+import { EnvironmentFilter } from '../security/sandbox.js';
 
 export type MCPTransportSpec =
   | {
@@ -129,13 +130,26 @@ export class MCPClientService {
 
   private async createTransport(): Promise<Transport> {
     if (this.spec.type === 'stdio') {
+      /**
+       * 第十八章 18.10.3：子进程**不能继承父进程的全部环境变量**。
+       *
+       * MCP Server 是外部代码（第十二章的 stdio 传输会真的 spawn 一个进程），
+       * 一旦被投毒或本身就是恶意的，继承来的 DATABASE_URL / JWT_SECRET /
+       * MODEL_CONFIG_SECRET / 各家 API Key 会整包泄露。
+       *
+       * 策略：先按敏感关键词过滤 process.env，再把 Server 自己显式声明的
+       * `spec.env` 叠加上去——显式声明优先，因为那是接入时人为确认过的。
+       * 需要给某个 Server 传名字里带敏感词但确实必须的变量，就在 spec.env 里写。
+       */
+      const declared = this.spec.env ?? {};
+      const filtered = new EnvironmentFilter().filter(
+        process.env as Record<string, string | undefined>,
+        Object.keys(declared),
+      );
       return new StdioClientTransport({
         command: this.spec.command,
         args: this.spec.args ?? [],
-        env: {
-          ...(process.env as Record<string, string>),
-          ...this.spec.env,
-        },
+        env: { ...filtered, ...declared },
         cwd: this.spec.cwd,
         // Server 的 stderr 不该污染 Client 日志，但要能看到崩溃原因
         stderr: 'pipe',

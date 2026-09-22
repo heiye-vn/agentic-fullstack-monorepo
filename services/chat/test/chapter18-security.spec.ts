@@ -17,7 +17,10 @@
  *
  * 运行：pnpm exec vitest run test/chapter18-security.spec.ts
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
+import { mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import {
   crossesTrustBoundary,
   trustScore,
@@ -66,6 +69,23 @@ import {
   noopSessionStore,
   type SessionStore,
 } from '../src/security/session-check.js';
+import {
+  PathValidator,
+  PathEscapeError,
+  EnvironmentFilter,
+  ProcessSandbox,
+  SandboxTimeoutError,
+  SandboxOutputLimitError,
+  SandboxCommandDeniedError,
+  type SandboxConfig,
+} from '../src/security/sandbox.js';
+import {
+  QuotaTracker,
+  withToolGuards,
+  ToolQuotaError,
+  ToolTimeoutError,
+} from '../src/security/tool-runtime.js';
+import { MCPManager } from '../src/mcp/mcp-manager.js';
 
 // ============================================================================
 // 18.4 Trust Boundary
@@ -765,6 +785,266 @@ describe('18.2 query token 只对流式路由开放', () => {
 
   it('路径缺失时不放行（Fail Closed）', () => {
     expect(isStreamRoute(undefined)).toBe(false);
+  });
+});
+
+// ============================================================================
+// 18.10 沙箱：损害半径控制
+// ============================================================================
+
+describe('18.4 sandbox — PathValidator', () => {
+  const root = resolve(join(tmpdir(), 'agentic-ch18-sandbox'));
+  const v = new PathValidator([root]);
+
+  it('允许根目录下的路径', () => {
+    expect(() => v.validate(join(root, 'a.txt'))).not.toThrow();
+    expect(() => v.validate(join(root, 'sub', 'b.txt'))).not.toThrow();
+    // 根目录自身也算在内
+    expect(() => v.validate(root)).not.toThrow();
+  });
+
+  it('`..` 逃逸被困在根目录内', () => {
+    const escaped = resolve(root, '..', '..', 'etc', 'passwd');
+    expect(() => v.validate(escaped)).toThrow(PathEscapeError);
+  });
+
+  it('前缀混淆不放行：root 与 root-evil 是两回事', () => {
+    expect(() => v.validate(join(`${root}-evil`, 'x.txt'))).toThrow(PathEscapeError);
+  });
+
+  it('空白名单等于拒绝一切（不静默放行）', () => {
+    expect(() => new PathValidator([])).toThrow(/allowedRoot/);
+  });
+
+  it('isAllowed 静默判定 + validateAll 批量校验', () => {
+    expect(v.isAllowed(join(root, 'a.txt'))).toBe(true);
+    expect(v.isAllowed(join(`${root}-evil`, 'a.txt'))).toBe(false);
+    expect(() => v.validateAll([join(root, 'a'), join(root, 'b')])).not.toThrow();
+    expect(() => v.validateAll([join(root, 'a'), '/etc/passwd'])).toThrow(PathEscapeError);
+  });
+
+  it('多个根目录取并集', () => {
+    const other = resolve(join(tmpdir(), 'agentic-ch18-other'));
+    const multi = new PathValidator([root, other]);
+    expect(multi.isAllowed(join(root, 'a'))).toBe(true);
+    expect(multi.isAllowed(join(other, 'b'))).toBe(true);
+    expect(multi.isAllowed(join(tmpdir(), 'agentic-ch18-third', 'c'))).toBe(false);
+  });
+});
+
+describe('18.4 sandbox — EnvironmentFilter', () => {
+  const filter = new EnvironmentFilter();
+
+  it('敏感关键词变量一律过滤', () => {
+    const out = filter.filter({
+      PATH: '/usr/bin',
+      OPENAI_API_KEY: 'sk-xxx',
+      DATABASE_URL: 'postgres://...',
+      JWT_SECRET: 's3cret',
+      MODEL_CONFIG_SECRET: 'enc:v1:xxx',
+      REFRESH_TOKEN_SECRET: 'yyy',
+    });
+    expect(out.PATH).toBe('/usr/bin');
+    expect(out.OPENAI_API_KEY).toBeUndefined();
+    expect(out.DATABASE_URL).toBeUndefined();
+    expect(out.JWT_SECRET).toBeUndefined();
+    expect(out.MODEL_CONFIG_SECRET).toBeUndefined();
+    expect(out.REFRESH_TOKEN_SECRET).toBeUndefined();
+  });
+
+  it('显式 allow 优先于黑名单（放行 Server 自己要用的变量）', () => {
+    const out = filter.filter({ SERVER_API_KEY: 'needed' }, ['SERVER_API_KEY']);
+    expect(out.SERVER_API_KEY).toBe('needed');
+  });
+
+  it('isSensitive 判定', () => {
+    expect(filter.isSensitive('MY_TOKEN')).toBe(true);
+    expect(filter.isSensitive('my_password')).toBe(true);
+    expect(filter.isSensitive('PATH')).toBe(false);
+    expect(filter.isSensitive('LANG')).toBe(false);
+  });
+
+  it('Windows 基线变量必须保留，否则子进程起不来', () => {
+    const out = filter.filter({
+      SYSTEMROOT: 'C:\\Windows',
+      COMSPEC: 'C:\\Windows\\System32\\cmd.exe',
+      PATHEXT: '.COM;.EXE;.BAT',
+      USERPROFILE: 'C:\\Users\\me',
+      SOME_SECRET: 'no',
+    });
+    expect(out.SYSTEMROOT).toBe('C:\\Windows');
+    expect(out.COMSPEC).toBeDefined();
+    expect(out.PATHEXT).toBeDefined();
+    expect(out.USERPROFILE).toBeDefined();
+    expect(out.SOME_SECRET).toBeUndefined();
+  });
+
+  it('strict 模式是白名单准入：只留基线 + allow', () => {
+    const out = filter.filterStrict(
+      {
+        PATH: '/usr/bin',
+        RANDOM_HARmless_VAR: 'keep?',
+        NEEDED_KEY: 'yes',
+      },
+      ['NEEDED_KEY'],
+    );
+    expect(out.PATH).toBe('/usr/bin');
+    expect(out.NEEDED_KEY).toBe('yes');
+    expect(out.RANDOM_HARmless_VAR).toBeUndefined();
+  });
+});
+
+describe('18.4 sandbox — ProcessSandbox', () => {
+  const workDir = resolve(join(tmpdir(), 'agentic-ch18-sandbox-run'));
+  beforeAll(() => mkdirSync(workDir, { recursive: true }));
+
+  const mk = (extra: Partial<SandboxConfig> = {}) =>
+    new ProcessSandbox({ workDir, ...extra });
+
+  it('子进程的工作目录被锁在 workDir 内', async () => {
+    const r = await mk().runNode('console.log(process.cwd())');
+    expect(r.exitCode).toBe(0);
+    // Windows 盘符大小写可能与 tmpdir() 不一致，统一后比较
+    expect(r.stdout.trim().toLowerCase()).toBe(workDir.toLowerCase());
+  });
+
+  it('不继承敏感环境变量：子进程看不到父进程的密钥', async () => {
+    process.env.CH18_SANDBOX_SECRET_KEY = 'leak-me';
+    try {
+      const r = await mk().runNode(
+        'console.log(process.env.CH18_SANDBOX_SECRET_KEY ?? "none")',
+      );
+      expect(r.stdout.trim()).toBe('none');
+    } finally {
+      delete process.env.CH18_SANDBOX_SECRET_KEY;
+    }
+  });
+
+  it('超时被 kill，抛 SandboxTimeoutError（不是静默挂起）', async () => {
+    await expect(
+      mk({ timeoutMs: 300 }).runNode('while(true){}'),
+    ).rejects.toThrow(SandboxTimeoutError);
+  });
+
+  it('输出超限抛 SandboxOutputLimitError——不是被误报成超时', async () => {
+    await expect(
+      mk({ maxOutputBytes: 1024 }).runNode('console.log("x".repeat(200000))'),
+    ).rejects.toThrow(SandboxOutputLimitError);
+  });
+
+  it('命令白名单：配了就只跑白名单里的', async () => {
+    await expect(mk({ allowedCommands: ['node'] }).runNode('console.log(1)')).resolves.toBeDefined();
+    await expect(
+      mk({ allowedCommands: ['python'] }).runNode('console.log(1)'),
+    ).rejects.toThrow(SandboxCommandDeniedError);
+  });
+
+  it('validatePath 只放行沙箱目录', () => {
+    const s = mk();
+    expect(s.isPathAllowed(join(workDir, 'a.txt'))).toBe(true);
+    expect(s.isPathAllowed(resolve(workDir, '..', '..', 'etc', 'passwd'))).toBe(false);
+  });
+
+  it('退出码非 0 时结果里带得上 stderr', async () => {
+    const r = await mk().runNode('console.error("boom"); process.exit(3);');
+    expect(r.exitCode).toBe(3);
+    expect(r.stderr).toContain('boom');
+  });
+});
+
+// ============================================================================
+// 18.6 工具调用的配额与超时护栏
+// ============================================================================
+
+describe('18.6 tool-runtime — 配额与超时', () => {
+  it('配额用尽后拒绝，而不是无限调用', async () => {
+    const quota = new QuotaTracker(2);
+    const ctx = { quotaKey: 'conv-1', quota };
+
+    await expect(withToolGuards('t', ctx, async () => 1)).resolves.toBe(1);
+    await expect(withToolGuards('t', ctx, async () => 2)).resolves.toBe(2);
+    await expect(withToolGuards('t', ctx, async () => 3)).rejects.toThrow(ToolQuotaError);
+    expect(quota.remaining('conv-1')).toBe(0);
+  });
+
+  it('配额按 key 隔离，不同会话互不影响', () => {
+    const quota = new QuotaTracker(1);
+    expect(quota.tryConsume('a')).toBe(true);
+    expect(quota.tryConsume('a')).toBe(false);
+    expect(quota.tryConsume('b')).toBe(true);
+    expect(quota.consumed('a')).toBe(1);
+  });
+
+  it('超时抛 ToolTimeoutError，并把 abort 信号传给被包装函数', async () => {
+    let aborted = false;
+    await expect(
+      withToolGuards(
+        'slow_tool',
+        { quotaKey: 'c1', quota: new QuotaTracker() },
+        (signal) => {
+          signal.addEventListener('abort', () => {
+            aborted = true;
+          });
+          return new Promise((r) => setTimeout(r, 5_000));
+        },
+        150,
+      ),
+    ).rejects.toThrow(ToolTimeoutError);
+    expect(aborted).toBe(true);
+  });
+
+  it('正常返回时不消耗多余时间、不误报超时', async () => {
+    const r = await withToolGuards(
+      'fast',
+      { quotaKey: 'c1', quota: new QuotaTracker() },
+      async () => 'ok',
+      1_000,
+    );
+    expect(r).toBe('ok');
+  });
+});
+
+describe('18.6 MCP 链路接线 — 配额与环境变量过滤', () => {
+  it('不注入 quota 时行为与改造前一致（不会误伤既有链路）', async () => {
+    const m = new MCPManager();
+    const first = await m.callTool({ toolName: 'not_exist', args: {} });
+    const second = await m.callTool({ toolName: 'not_exist', args: {} });
+    expect(String(first)).toContain('tool_not_found');
+    expect(String(second)).toContain('tool_not_found');
+  });
+
+  it('注入 quota 后超限返回 quota_exceeded 且计入 trace', async () => {
+    const m = new MCPManager({ quota: new QuotaTracker(1) });
+    await m.callTool({ toolName: 'not_exist', args: {}, conversationId: 'c1' });
+    const second = await m.callTool({
+      toolName: 'not_exist',
+      args: {},
+      conversationId: 'c1',
+    });
+    expect(String(second)).toContain('quota_exceeded');
+
+    const traces = m.getTraces();
+    expect(traces.some((t) => t.status === 'denied')).toBe(true);
+  });
+
+  it('环境变量过滤：子进程拿不到 DATABASE_URL / JWT_SECRET', () => {
+    const declared = { SERVER_API_KEY: 'explicitly-allowed' };
+    const source = {
+      PATH: '/usr/bin',
+      SYSTEMROOT: 'C:\\Windows',
+      DATABASE_URL: 'postgres://user:pw@localhost/db',
+      JWT_SECRET: 'super-secret',
+      SERVER_API_KEY: 'explicitly-allowed',
+    };
+
+    const filtered = new EnvironmentFilter().filter(source, Object.keys(declared));
+    // 显式声明的仍然传入（接入时人工确认过）
+    expect(filtered.SERVER_API_KEY).toBe('explicitly-allowed');
+    expect(filtered.PATH).toBe('/usr/bin');
+    expect(filtered.SYSTEMROOT).toBe('C:\\Windows');
+    // 继承来的密钥被挡住
+    expect(filtered.DATABASE_URL).toBeUndefined();
+    expect(filtered.JWT_SECRET).toBeUndefined();
   });
 });
 
