@@ -9,6 +9,18 @@
       {
         "include": "skills/definitions/**/*.md",
         "watchAssets": true
+      },
+      {
+        "include": "eval/rubrics/**/*.yaml",
+        "watchAssets": true
+      },
+      {
+        "include": "eval/datasets/**/*.jsonl",
+        "watchAssets": true
+      },
+      {
+        "include": "eval/corpus/**/*.jsonl",
+        "watchAssets": true
       }
     ]
   }

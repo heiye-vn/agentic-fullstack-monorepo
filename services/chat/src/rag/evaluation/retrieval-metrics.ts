@@ -34,6 +34,84 @@ export function recallAtK(
 }
 
 /**
+ * 计算 Precision@K（精确率）
+ * 前 K 个检索结果中，真实相关文档占返回结果的比例。
+ *
+ * 与 Recall@K 的唯一区别在**分母**：
+ *   Recall@K    = (Top-K 中相关文档数) / (标注的相关文档总数)  —— 度量「漏没漏」
+ *   Precision@K = (Top-K 中相关文档数) / (实际返回的文档数)    —— 度量「准不准」
+ *
+ * 两者不可互相替代：topK 调大会推高 Recall 但压低 Precision，
+ * 只看 Recall 会得出「topK 越大越好」的错误结论（第十七章 17.3.2）。
+ *
+ * ⚠️ 边界：当 Top-K 实际返回为空（检索没召回任何东西）时返回 0，
+ * 而不是 NaN —— 后者会让聚合均值整体变成 NaN 并静默穿透门禁。
+ *
+ * @param retrievedIds 检索返回的文档/切片 ID 列表
+ * @param relevantIds 标注为真实相关的文档/切片 ID 列表
+ * @param k 截断排名阈值
+ * @returns 精确率分数 (0 ~ 1)
+ */
+export function precisionAtK(
+  retrievedIds: string[],
+  relevantIds: string[],
+  k: number,
+): number {
+  if (k <= 0 || !retrievedIds) {
+    return 0;
+  }
+
+  const topK = retrievedIds.slice(0, k);
+  if (topK.length === 0) {
+    return 0;
+  }
+
+  const relevantSet = new Set(relevantIds || []);
+  if (relevantSet.size === 0) {
+    return 0;
+  }
+
+  const hitCount = new Set(topK.filter((id) => relevantSet.has(id))).size;
+
+  return hitCount / topK.length;
+}
+
+/**
+ * 计算单个 Query 的 Reciprocal Rank（倒数排名）
+ * 第一个相关结果所处排名的倒数；未命中则为 0。
+ *
+ * MRR 的定义就是「所有 Query 的 RR 之均值」（见下方 mrr 函数），
+ * 本函数把它拆出来，是为了让「逐 case 出报告」的评测 runner 能先把每个
+ * case 的 RR 存进 CaseMetrics，再由 aggregate 统一汇总 —— 否则 MRR 只能
+ * 在全量跑完后一次性计算，无法按 tag 分桶。
+ *
+ * @param retrievedIds 检索返回的文档/切片 ID 列表
+ * @param relevantIds 标注为真实相关的文档/切片 ID 列表
+ * @returns 倒数排名 (0 ~ 1)
+ */
+export function reciprocalRank(
+  retrievedIds: string[],
+  relevantIds: string[],
+): number {
+  if (!retrievedIds || retrievedIds.length === 0) {
+    return 0;
+  }
+
+  const relevantSet = new Set(relevantIds || []);
+  if (relevantSet.size === 0) {
+    return 0;
+  }
+
+  for (let i = 0; i < retrievedIds.length; i++) {
+    if (relevantSet.has(retrievedIds[i])) {
+      return 1 / (i + 1);
+    }
+  }
+
+  return 0;
+}
+
+/**
  * 计算 MRR（Mean Reciprocal Rank，平均倒数排名）
  * 第一个相关结果的排名的倒数，对所有查询取平均。
  *
