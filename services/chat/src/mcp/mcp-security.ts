@@ -54,13 +54,31 @@ export function requiresConfirmation(
   return level === 'write' || level === 'admin';
 }
 
+/**
+ * 默认白名单 = 权限表里登记过的工具（第十八章 18.11「默认 deny」）。
+ *
+ * 改动前，调用方不传 `allowedTools` 时是**不限制**（等于全部放行）——
+ * 第三方 Server 接进来暴露什么都敢调。现在不传白名单时回落到这张表：
+ * 登记过的才放行，未登记的一律拒绝。
+ */
+export const DEFAULT_ALLOWED_TOOLS: string[] = Object.keys(DEFAULT_TOOL_PERMISSIONS);
+
 export interface PermissionContext {
-  /** 白名单：不传表示不限制 */
+  /**
+   * 白名单：不传（或空数组）时回落到 {@link DEFAULT_ALLOWED_TOOLS}。
+   * 想完全放开必须显式传 `allowUnregisteredTools: true`。
+   */
   allowedTools?: string[];
   /** 黑名单：优先于白名单 */
   deniedTools?: string[];
   /** 已确认过高危操作的工具名集合（HITL 通过后才放进来） */
   confirmedTools?: string[];
+  /**
+   * 放行未登记在权限表里的工具，默认 false。
+   * 仅用于「接入了可信的自建 Server、且工具确实没登记」的过渡场景，
+   * 正常情况下应保持关闭。
+   */
+  allowUnregisteredTools?: boolean;
 }
 
 export type PermissionDecision =
@@ -78,10 +96,18 @@ export function checkToolPermission(
     return { allowed: false, reason: '工具在黑名单内', level };
   }
 
-  if (ctx.allowedTools && ctx.allowedTools.length > 0) {
-    if (!ctx.allowedTools.includes(toolName)) {
-      return { allowed: false, reason: '当前用户未被授权使用该工具', level };
-    }
+  // 第十八章 18.11：白名单缺省时回落到默认清单，而不是"全部放行"
+  const hasExplicitAllowlist = !!ctx.allowedTools && ctx.allowedTools.length > 0;
+  const allowlist = hasExplicitAllowlist ? ctx.allowedTools! : DEFAULT_ALLOWED_TOOLS;
+
+  if (!ctx.allowUnregisteredTools && !allowlist.includes(toolName)) {
+    return {
+      allowed: false,
+      reason: hasExplicitAllowlist
+        ? '当前用户未被授权使用该工具'
+        : '工具未登记在默认白名单内（默认 deny）',
+      level,
+    };
   }
 
   if (requiresConfirmation(toolName, level) && !ctx.confirmedTools?.includes(toolName)) {

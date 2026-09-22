@@ -86,6 +86,20 @@ import {
   ToolTimeoutError,
 } from '../src/security/tool-runtime.js';
 import { MCPManager } from '../src/mcp/mcp-manager.js';
+import { checkToolPermission } from '../src/mcp/mcp-security.js';
+import {
+  KillSwitch,
+  KillSwitchEngagedError,
+  ActionLog,
+  RiskBasedApproval,
+} from '../src/security/kill-switch.js';
+import {
+  DataClassifier,
+  DataFlowGuard,
+  DataFlowViolation,
+  DataLineageTracker,
+  sensitivityRank,
+} from '../src/security/data-flow-guard.js';
 
 // ============================================================================
 // 18.4 Trust Boundary
@@ -1005,19 +1019,23 @@ describe('18.6 tool-runtime — 配额与超时', () => {
 });
 
 describe('18.6 MCP 链路接线 — 配额与环境变量过滤', () => {
+  // 用登记过的工具名：未登记的名字会被 18.11 的默认 deny 拦在权限层，
+  // 根本走不到配额判定，测不出配额行为
+  const REGISTERED_TOOL = 'search_knowledge_base';
+
   it('不注入 quota 时行为与改造前一致（不会误伤既有链路）', async () => {
     const m = new MCPManager();
-    const first = await m.callTool({ toolName: 'not_exist', args: {} });
-    const second = await m.callTool({ toolName: 'not_exist', args: {} });
+    const first = await m.callTool({ toolName: REGISTERED_TOOL, args: {} });
+    const second = await m.callTool({ toolName: REGISTERED_TOOL, args: {} });
     expect(String(first)).toContain('tool_not_found');
     expect(String(second)).toContain('tool_not_found');
   });
 
   it('注入 quota 后超限返回 quota_exceeded 且计入 trace', async () => {
     const m = new MCPManager({ quota: new QuotaTracker(1) });
-    await m.callTool({ toolName: 'not_exist', args: {}, conversationId: 'c1' });
+    await m.callTool({ toolName: REGISTERED_TOOL, args: {}, conversationId: 'c1' });
     const second = await m.callTool({
-      toolName: 'not_exist',
+      toolName: REGISTERED_TOOL,
       args: {},
       conversationId: 'c1',
     });
@@ -1025,6 +1043,29 @@ describe('18.6 MCP 链路接线 — 配额与环境变量过滤', () => {
 
     const traces = m.getTraces();
     expect(traces.some((t) => t.status === 'denied')).toBe(true);
+  });
+
+  it('默认 deny：未传白名单时，未登记的工具被拒绝（不是全部放行）', () => {
+    // 登记过的只读工具：不传白名单也放行
+    expect(checkToolPermission('search_knowledge_base').allowed).toBe(true);
+    // 从未登记过的陌生工具：拒绝
+    const unknown = checkToolPermission('totally_unknown_tool');
+    expect(unknown.allowed).toBe(false);
+    if (!unknown.allowed) expect(unknown.reason).toContain('默认白名单');
+  });
+
+  it('显式白名单仍然优先，且保留原有拒绝文案', () => {
+    const d = checkToolPermission('ws_search_competitors', {
+      allowedTools: ['req_analyze_completeness'],
+    });
+    expect(d.allowed).toBe(false);
+    if (!d.allowed) expect(d.reason).toContain('未被授权');
+  });
+
+  it('确实是自建可信 Server 时，可以显式放开未登记工具', () => {
+    expect(
+      checkToolPermission('totally_unknown_tool', { allowUnregisteredTools: true }).allowed,
+    ).toBe(true);
   });
 
   it('环境变量过滤：子进程拿不到 DATABASE_URL / JWT_SECRET', () => {
@@ -1045,6 +1086,298 @@ describe('18.6 MCP 链路接线 — 配额与环境变量过滤', () => {
     // 继承来的密钥被挡住
     expect(filtered.DATABASE_URL).toBeUndefined();
     expect(filtered.JWT_SECRET).toBeUndefined();
+  });
+});
+
+// ============================================================================
+// 18.14 Kill Switch / 操作快照 / 风险自适应审批
+// ============================================================================
+
+describe('kill-switch — KillSwitch 紧急停止', () => {
+  it('全局停止后 assertActive 抛错，restore 后恢复', () => {
+    const ks = new KillSwitch();
+    expect(ks.isActive()).toBe(true);
+    expect(() => ks.assertActive()).not.toThrow();
+
+    ks.kill('检测到批量删库行为');
+    expect(ks.isActive()).toBe(false);
+    expect(() => ks.assertActive()).toThrow(KillSwitchEngagedError);
+    expect(() => ks.assertActive()).toThrow(/批量删库/);
+
+    ks.restore();
+    expect(ks.isActive()).toBe(true);
+    expect(ks.getStatus().globalKill).toBeNull();
+  });
+
+  it('作用域停止：只停失控的那一个会话，不连坐其他会话', () => {
+    const ks = new KillSwitch();
+    ks.kill('该会话陷入工具调用死循环', { conversationId: 'conv-bad' });
+
+    // 命中作用域 → 停
+    expect(ks.isActive({ conversationId: 'conv-bad' })).toBe(false);
+    expect(() => ks.assertActive({ conversationId: 'conv-bad' })).toThrow(
+      KillSwitchEngagedError,
+    );
+    // 其他会话不受影响
+    expect(ks.isActive({ conversationId: 'conv-good' })).toBe(true);
+    expect(() => ks.assertActive({ conversationId: 'conv-good' })).not.toThrow();
+  });
+
+  it('作用域按声明的字段做 AND 匹配', () => {
+    const ks = new KillSwitch();
+    ks.kill('停掉这个 Agent 在这个会话里的行为', {
+      agentId: 'agent-1',
+      conversationId: 'conv-1',
+    });
+
+    // 两个字段都对上才算命中
+    expect(ks.isActive({ agentId: 'agent-1', conversationId: 'conv-1' })).toBe(false);
+    // 只对上一个 → 不命中
+    expect(ks.isActive({ agentId: 'agent-1', conversationId: 'conv-2' })).toBe(true);
+    expect(ks.isActive({ agentId: 'agent-2', conversationId: 'conv-1' })).toBe(true);
+  });
+
+  it('restore 可以只撤销指定作用域，不动其他停止记录', () => {
+    const ks = new KillSwitch();
+    ks.kill('a', { agentId: 'agent-1' });
+    ks.kill('b', { agentId: 'agent-2' });
+
+    ks.restore({ agentId: 'agent-1' });
+    expect(ks.isActive({ agentId: 'agent-1' })).toBe(true);
+    expect(ks.isActive({ agentId: 'agent-2' })).toBe(false);
+    expect(ks.getStatus().scopedKills).toHaveLength(1);
+  });
+});
+
+describe('kill-switch — ActionLog 操作快照', () => {
+  it('记录快照并自动生成 id 与时间戳', () => {
+    const log = new ActionLog();
+    const snap = log.record({
+      agentId: 'agent-1',
+      action: 'delete',
+      target: 'requirement:REQ-1',
+      params: { force: true },
+      reversible: true,
+      compensationAction: '从备份恢复 REQ-1',
+    });
+    expect(snap.id).toMatch(/^snap-/);
+    expect(new Date(snap.timestamp).getTime()).toBeGreaterThan(0);
+    expect(log.size).toBe(1);
+  });
+
+  it('getReversible 只返回可回滚的，且按时间倒序（最近的最先撤）', () => {
+    const log = new ActionLog();
+    const mk = (i: number, reversible: boolean) =>
+      log.record({
+        agentId: 'agent-1',
+        action: `step-${i}`,
+        target: `t-${i}`,
+        params: {},
+        reversible,
+      });
+    mk(1, true);
+    mk(2, false);
+    mk(3, true);
+
+    const rev = log.getReversible();
+    expect(rev).toHaveLength(2);
+    expect(rev[0].action).toBe('step-3');
+    expect(rev[1].action).toBe('step-1');
+  });
+
+  it('按 Agent / 按目标检索（出事后要找出谁动过这张表）', () => {
+    const log = new ActionLog();
+    log.record({ agentId: 'a1', action: 'update', target: 'users', params: {}, reversible: true });
+    log.record({ agentId: 'a2', action: 'delete', target: 'users', params: {}, reversible: false });
+    log.record({ agentId: 'a1', action: 'read', target: 'orders', params: {}, reversible: false });
+
+    expect(log.getByAgent('a1')).toHaveLength(2);
+    expect(log.getByTarget('users')).toHaveLength(2);
+    log.clear();
+    expect(log.size).toBe(0);
+  });
+});
+
+describe('kill-switch — RiskBasedApproval', () => {
+  const approval = new RiskBasedApproval();
+
+  it('按风险分级：只读自动过、写操作一人批、删除两人批、转账禁止', () => {
+    expect(approval.getStrategy('search_knowledge_base')).toBe('auto_approve');
+    expect(approval.getStrategy('create_requirement')).toBe('single_approval');
+    expect(approval.getStrategy('delete_requirement')).toBe('dual_approval');
+    expect(approval.getStrategy('transfer_money')).toBe('deny');
+  });
+
+  it('未登记过的陌生工具默认要审批（Fail Closed，不是自动放行）', () => {
+    // classifyToolPermission 对认不出的名字返回 'read'，若直接采信就等于放行
+    expect(approval.getStrategy('sync_external_system')).toBe('single_approval');
+    expect(approval.requiresHuman('sync_external_system')).toBe(true);
+  });
+
+  it('requiresHuman / isDenied / requiredApprovals', () => {
+    expect(approval.requiresHuman('delete_requirement')).toBe(true);
+    expect(approval.requiresHuman('search_knowledge_base')).toBe(false);
+    expect(approval.isDenied('transfer_money')).toBe(true);
+    expect(approval.isDenied('delete_requirement')).toBe(false);
+
+    expect(approval.requiredApprovals('search_knowledge_base')).toBe(0);
+    expect(approval.requiredApprovals('create_requirement')).toBe(1);
+    expect(approval.requiredApprovals('delete_requirement')).toBe(2);
+    // deny 意味着多少人签字都不该过
+    expect(approval.requiredApprovals('transfer_money')).toBe(Infinity);
+  });
+});
+
+// ============================================================================
+// 18.15 数据流控制
+// ============================================================================
+
+describe('18.6 DataClassifier', () => {
+  const classifier = new DataClassifier();
+
+  it('普通文本是 public', () => {
+    expect(classifier.classify('今天天气不错').sensitivity).toBe('public');
+    expect(classifier.classify('需求：批量导入用户').matchedPatterns).toEqual([]);
+  });
+
+  it('PII 判为 confidential', () => {
+    const email = classifier.classify('请联系 zhangsan@company.com');
+    expect(email.sensitivity).toBe('confidential');
+    expect(email.matchedPatterns).toContain('email_address');
+
+    const phone = classifier.classify('手机号 13812345678');
+    expect(phone.sensitivity).toBe('confidential');
+    expect(phone.matchedPatterns).toContain('phone_cn');
+  });
+
+  it('密钥判为 secret', () => {
+    const key = classifier.classify('密钥：sk-abcdefghijklmnopqrst');
+    expect(key.sensitivity).toBe('secret');
+
+    const pk = classifier.classify('-----BEGIN RSA PRIVATE KEY-----\nMIIEpA...');
+    expect(pk.sensitivity).toBe('secret');
+    expect(pk.matchedPatterns).toContain('private_key');
+  });
+
+  it('本项目特有的 enc:v1: 密文也按 secret 处理', () => {
+    const enc = classifier.classify('apiKey=enc:v1:QWxhZGRpbjpvcGVuc2VzYW1lMTIzNDU2');
+    expect(enc.sensitivity).toBe('secret');
+    expect(enc.matchedPatterns).toContain('enc_cipher');
+  });
+
+  it('内网地址与数据库连接串判为 internal', () => {
+    expect(classifier.classify('http://192.168.1.100:3000/api').sensitivity).toBe('internal');
+    expect(
+      classifier.classify('postgres://user:pw@localhost:5432/db').sensitivity,
+    ).toBe('internal');
+  });
+
+  it('重复分类结果稳定——正则不带 g，不会有 lastIndex 残留', () => {
+    const content = '联系人 a@b.com，备用 c@d.com';
+    const first = classifier.classify(content);
+    const second = classifier.classify(content);
+    expect(second.sensitivity).toBe(first.sensitivity);
+    expect(second.matchedPatterns).toEqual(first.matchedPatterns);
+  });
+
+  it('敏感度排序：public < internal < confidential < secret', () => {
+    expect(sensitivityRank('public')).toBeLessThan(sensitivityRank('internal'));
+    expect(sensitivityRank('internal')).toBeLessThan(sensitivityRank('confidential'));
+    expect(sensitivityRank('confidential')).toBeLessThan(sensitivityRank('secret'));
+  });
+});
+
+describe('18.6 DataFlowGuard', () => {
+  const guard = new DataFlowGuard();
+
+  it('secret 级：不能流向 web / email / log / user_output，但可写本地文件', () => {
+    const secret = '密钥 sk-abcdefghijklmnopqrst';
+    expect(guard.isAllowed(secret, 'web')).toBe(false);
+    expect(guard.isAllowed(secret, 'email')).toBe(false);
+    expect(guard.isAllowed(secret, 'log')).toBe(false);
+    expect(guard.isAllowed(secret, 'user_output')).toBe(false);
+    expect(guard.isAllowed(secret, 'file')).toBe(true);
+  });
+
+  it('confidential 级：不能流向 web / log，可以发邮件给用户', () => {
+    const pii = '联系 zhangsan@company.com';
+    expect(guard.isAllowed(pii, 'web')).toBe(false);
+    expect(guard.isAllowed(pii, 'log')).toBe(false);
+    expect(guard.isAllowed(pii, 'email')).toBe(true);
+    expect(guard.isAllowed(pii, 'user_output')).toBe(true);
+  });
+
+  it('internal 级：只挡外部网络', () => {
+    const internal = '内网 http://192.168.1.100/api';
+    expect(guard.isAllowed(internal, 'web')).toBe(false);
+    expect(guard.isAllowed(internal, 'log')).toBe(true);
+    expect(guard.isAllowed(internal, 'file')).toBe(true);
+  });
+
+  it('public 级：全部放行', () => {
+    for (const t of ['web', 'email', 'file', 'log', 'user_output'] as const) {
+      expect(guard.isAllowed('普通文本报告', t)).toBe(true);
+    }
+  });
+
+  it('违规抛 DataFlowViolation（类型化，便于上层分级处理）', () => {
+    try {
+      guard.checkBeforeSend('sk-abcdefghijklmnopqrst', 'web');
+      expect.unreachable('应当抛出');
+    } catch (e) {
+      expect(e).toBeInstanceOf(DataFlowViolation);
+      const v = e as DataFlowViolation;
+      expect(v.sensitivity).toBe('secret');
+      expect(v.target).toBe('web');
+      expect(v.matchedPatterns.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('checkBeforeSend 通过时返回分类结果', () => {
+    const r = guard.checkBeforeSend('普通文本', 'web');
+    expect(r.sensitivity).toBe('public');
+  });
+});
+
+describe('data-flow-guard — DataLineageTracker', () => {
+  it('记录来源敏感度与血缘步骤', () => {
+    const tracker = new DataLineageTracker();
+    const id = tracker.recordRead('database', '财务报表：营收 100 万', 'agent-1');
+    tracker.recordStep(id, 'agent-1', 'summarize');
+    tracker.recordStep(id, 'agent-2', 'forward');
+
+    const rec = tracker.getLineage(id);
+    expect(rec?.source).toBe('database');
+    expect(rec?.steps.map((s) => s.action)).toEqual(['read', 'summarize', 'forward']);
+    // 存的是 hash 不是原文
+    expect(rec?.contentHash).toHaveLength(16);
+  });
+
+  it('内容被摘要后不敏感，来源敏感度仍然生效（血缘分类的核心价值）', () => {
+    const tracker = new DataLineageTracker();
+    // 原文含密钥 → 来源判为 secret
+    const id = tracker.recordRead('file', 'apiKey=sk-abcdefghijklmnopqrst', 'agent-1');
+    expect(tracker.getLineage(id)?.sourceSensitivity).toBe('secret');
+
+    // 摘要后的内容完全不含敏感词，内容分类会判 public…
+    const classifier = new DataClassifier();
+    expect(classifier.classify('营收同比增长 20%').sensitivity).toBe('public');
+    // …但血缘守卫仍然拦住它外发
+    const verdict = tracker.checkLineage(id, 'web');
+    expect(verdict.allowed).toBe(false);
+    expect(verdict.reason).toContain('secret');
+  });
+
+  it('来源不敏感时，摘要后外发是允许的', () => {
+    const tracker = new DataLineageTracker();
+    const id = tracker.recordRead('web', '公开新闻：今日天气', 'agent-1');
+    expect(tracker.checkLineage(id, 'web').allowed).toBe(true);
+  });
+
+  it('查不到血缘记录时放行（埋点缺失不该由守卫随机拒绝）', () => {
+    const tracker = new DataLineageTracker();
+    expect(tracker.checkLineage('lineage-nope', 'web').allowed).toBe(true);
+    expect(tracker.size).toBe(0);
   });
 });
 
