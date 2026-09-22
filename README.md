@@ -59,7 +59,8 @@
 - **智能体编排**：`@langchain/langgraph`、`@langchain/core`、`@langchain/openai`、`zod`
 - **数据持久层**：PostgreSQL 16、Prisma ORM (多 Schema 隔离、数据迁移、自动生成 Client)
 - **安全与加密**：Node.js Crypto (`AES-256-GCM` 凭据加密)、JWT 双 Token 轮转与守卫
-- **容器与环境**：Docker Compose、Alpine 极简镜像分阶段构建
+- **容器与环境**：Docker Compose 多阶段构建（Debian slim 基础镜像）
+- **交付流水线**：GitHub Actions（typecheck/lint/test/build 门禁 + nightly LLM 评测 + GHCR 镜像推送）
 
 ---
 
@@ -169,14 +170,41 @@ pnpm dev:rbac       # 权限管理端: http://localhost:3100 (默认账号: admi
 
 ---
 
-## 🐳 Docker 生产容器编排
+## 🐳 Docker 容器编排
 
-项目所有容器构建文件存放在 [`infra/compose`](./infra/compose) 目录：
+项目所有容器构建文件存放在 [`infra/compose`](./infra/compose) 目录。
+
+### 一键拉起完整环境
 
 ```bash
-# 生产多容器构建与启动
-docker compose -f infra/compose/compose.yaml up --build
+cp infra/compose/.env.example infra/compose/.env   # 首次必须做，缺 .env 会直接报错
+docker compose -f infra/compose/compose.yaml up -d --build
+docker compose -f infra/compose/compose.yaml ps    # 观察 healthcheck 状态
+```
 
-# 本地热开发容器编排
+`compose.yaml` 里的服务按 healthcheck 依次就绪：
+
+```
+postgres 健康 → migrate 跑完 prisma migrate deploy 后退出 → chat 就绪（/ready 返回 200）→ chat-web 启动
+```
+
+- `migrate` 是一次性 init 容器，跑 `migrate deploy`（只前滚、绝不重置），不是 `migrate dev`
+- `chat` 的探针打的是 `/ready`（真探数据库）而不是 `/health`（liveness，刻意不探依赖）
+- postgres 刻意不映射宿主机端口 —— 本机 5432 通常已被开发库占用，容器间走内部网络即可
+
+> **第一步不能省**：`compose.yaml` 用 `${POSTGRES_PASSWORD:?...}` 声明必填变量，
+> 缺少 `.env` 时会在启动时直接报错，而不是带着空密码把服务拉起来之后、
+> 在 chat 连数据库时才失败 —— 后者的排查成本要高得多。
+
+> **为什么基础镜像是 Debian slim 而不是 Alpine？**
+> chat 的本地 embedding 走 `@xenova/transformers`，它依赖 `onnxruntime-node` 的原生库，
+> 而该库只提供 glibc 版本 —— 在 musl 的 Alpine 里会以 `ld-linux-x86-64.so.2` 缺失直接崩溃。
+> 这类问题 build 期完全看不出来，只有把容器真正跑起来才会暴露。
+
+### 本地热开发容器编排
+
+```bash
 docker compose -f infra/compose/compose.dev.yaml up
 ```
+
+该编排会把源码挂进容器并跑 watch，同时把 PostgreSQL 映射到宿主机 `5432` 便于本地工具连接。日常开发更推荐直接在宿主机跑 `pnpm dev`，容器编排主要用于调试容器内的行为。

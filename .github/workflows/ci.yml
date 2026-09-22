@@ -1,0 +1,183 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # UTC 时间。北京时间=UTC+8，想在北京时间 10:00 跑就要写 02:00。
+    # （教程里写的 "0 18 * * *" 对应的是北京时间凌晨 2:00，注释标注有误，这里做了修正）
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+# 同一个 PR 的多次推送只保留最新一次运行，避免排队烧 CI 时长
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TURBO_TELEMETRY_DISABLED: "1"
+  # 两个服务各有独立的库，测试按包分别注入对应的连接串
+  CHAT_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/autix_chat?schema=public
+  RBAC_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/autix_rbac?schema=public
+
+jobs:
+  # ── 每次 PR / push 都跑：便宜的确定性检查，失败尽早退出 ──
+  ci:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autix_chat
+        ports:
+          - 5432:5432
+        # 不加 --health-* 的话，Actions 只等容器拉起就开始跑 step，
+        # 首次 migrate 会因数据库还没接受连接而失败。这个问题只在 CI 出现，
+        # 本地 compose 有 depends_on + healthcheck 兜不住这个顺序。
+        options: >-
+          --health-cmd "pg_isready -U postgres -d autix_chat"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enable pnpm (corepack)
+        run: corepack enable && corepack prepare pnpm@10.12.1 --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare second database (autix_rbac)
+        run: PGPASSWORD=postgres psql -h localhost -U postgres -c 'CREATE DATABASE autix_rbac;'
+
+      # ── 便宜且确定的检查先跑：秒级、不花钱、不依赖外部服务 ──
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Lint
+        run: pnpm run lint
+
+      # ── 迁移用 deploy 而不是 dev：只前滚，绝不重置 ──
+      - name: Migrate chat database
+        run: DATABASE_URL="$CHAT_DATABASE_URL" pnpm --filter @autix/chat db:deploy
+
+      - name: Migrate user-system database
+        run: DATABASE_URL="$RBAC_DATABASE_URL" pnpm --filter @autix/user-system prisma:deploy
+
+      # ── 测试：两个服务的库不同，必须按包注入各自的 DATABASE_URL ──
+      # 两个 crate 的 Layer 2 用例都需要显式 RUN_LLM_*_TESTS=1 才跑，
+      # CI 不设这些变量，天然只跑便宜的确定性测试（第十九章的 Layer 分层）。
+      - name: Test @autix/chat
+        run: DATABASE_URL="$CHAT_DATABASE_URL" pnpm turbo run test --filter=@autix/chat
+
+      - name: Test @autix/user-system
+        run: DATABASE_URL="$RBAC_DATABASE_URL" pnpm turbo run test --filter=@autix/user-system
+
+      - name: Build
+        run: pnpm run build
+
+  # ── nightly / 手动：LLM 评测质量门禁 ──
+  eval:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autix_chat
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d autix_chat"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enable pnpm (corepack)
+        run: corepack enable && corepack prepare pnpm@10.12.1 --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Migrate chat database
+        run: DATABASE_URL="$CHAT_DATABASE_URL" pnpm --filter @autix/chat db:deploy
+
+      # run-eval.ts 会建 PrismaClient 连评测数据集（未设 DATABASE_URL 时它默认连
+      # localhost 的开发库），所以评测 job 同样需要数据库。
+      # 脚本退出码非 0 即视为质量退化，直接让 job 失败。
+      - name: Run eval gate
+        run: DATABASE_URL="$CHAT_DATABASE_URL" pnpm --filter @autix/chat eval
+
+      - name: Upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          # run-eval.ts 的 REPORTS_DIR 是 services/chat/src/eval/reports/
+          name: eval-report
+          path: services/chat/src/eval/reports/
+
+  # ── 仅 main push 且 ci 通过后：构建并推送镜像到 GHCR ──
+  docker:
+    if: github.event_name == 'push'
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - name: chat
+            dockerfile: infra/compose/Dockerfile.chat
+          - name: web
+            dockerfile: infra/compose/Dockerfile.web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata (tags/labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/${{ matrix.name }}
+          tags: |
+            type=raw,value=latest
+            # sha tag 是回滚的前提：只有 latest 就无法回到上一个已知版本
+            type=sha,format=long
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
