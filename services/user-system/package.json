@@ -16,6 +16,7 @@
     "test": "vitest run",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
     "prisma:push": "prisma db push",
     "prisma:seed": "prisma db seed"
   },
@@ -49,6 +50,7 @@
     "@prisma/config": "7.10.0",
     "@types/express": "^5.0.0",
     "@types/node": "^24.0.0",
+    "@types/express": "^5.0.6",
     "@types/passport-jwt": "^4.0.1",
     "@types/pg": "^8.11.11",
     "prisma": "7.10.0",

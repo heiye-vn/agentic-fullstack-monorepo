@@ -5,7 +5,9 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { UIText } from '@/types/ai-ui';
 
-interface TextMessageProps extends UIText {}
+// 第十九章 lint 门禁：原来是 `interface X extends UIText {}`（空接口体），
+// 等价于父类型、没有任何扩展，统一改成类型别名表达同一契约。
+type TextMessageProps = UIText;
 
 export function TextMessage({ content }: TextMessageProps) {
   return (

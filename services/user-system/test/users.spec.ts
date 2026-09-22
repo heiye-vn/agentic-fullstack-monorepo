@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { PrismaService } from "../src/prisma/prisma.service.js";
 import { UsersService } from "../src/modules/users/users.service.js";
-import { CommonStatus } from "@prisma/client";
+// 第十九章：迁移到 `prisma-client` generator（output: ../src/generated/prisma）后，
+// 枚举不再从 `@prisma/client` 导出。此处旧导入会让整个 spec 在加载期就失败
+// （Cannot find module '.prisma/client/default'），此前因为没有 CI 从未被发现。
+import { CommonStatus } from "../src/generated/prisma/client.js";
 import { ConflictException, NotFoundException } from "@nestjs/common";
 
 describe("Users Module Integration Test", () => {

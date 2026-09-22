@@ -3,7 +3,9 @@ import { Card, Chip } from '@heroui/react';
 import { Check } from 'lucide-react';
 import { UISteps } from '@/types/ai-ui';
 
-interface StepsProgressProps extends UISteps {}
+// 第十九章 lint 门禁：原来是 `interface X extends UISteps {}`（空接口体），
+// 等价于父类型、没有任何扩展，统一改成类型别名表达同一契约。
+type StepsProgressProps = UISteps;
 
 export function StepsProgress({
   steps,
