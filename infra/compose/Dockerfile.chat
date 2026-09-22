@@ -1,36 +1,94 @@
-FROM node:22-alpine AS builder
+# infra/compose/Dockerfile.chat — @autix/chat 的 monorepo 多阶段构建
+#
+# 为什么必须是多阶段 + monorepo-aware：
+#   单阶段镜像会在每次改业务代码时重装全部依赖，并把源码、devDeps、
+#   日志和上 GB 的 .git 一起打包进运行时，体积与攻击面都失控。
+#
+# 第十九章修正的旧版问题：
+#   ① Stage 1 只 COPY 了 contracts/chat/chat-web 三个 manifest —— root postinstall
+#      会对 @autix/user-system 跑 prisma generate，且 chat 依赖 @autix/types，
+#      两者缺失会让 `pnpm install` 直接失败（这个镜像此前从未真的 build 过）
+#   ② postinstall 会读 prisma.config.ts + schema.prisma，必须先于 install 就位
+#   ③ runner 把整个 /app 从 builder 复制过来，源码与 devDeps 全进运行时；
+#      且没有 HEALTHCHECK，compose 无法判断服务真正就绪
 
+# 基础镜像刻意选 Debian 系而不是 Alpine：chat 的本地 embedding 走 @xenova/transformers，
+# 它依赖 onnxruntime-node 的原生库，而该库只提供 glibc 版本 —— 在 musl 的 Alpine 里会以
+# `Error loading shared library ld-linux-x86-64.so.2` 直接崩掉。这个问题 build 期完全
+# 看不出来，只有真把容器跑起来才会暴露（第十九章的"永远在干净环境验证"）。
+
+# ── Stage 1: deps —— 只装依赖（manifest 不变即命中缓存）──
+FROM node:22-bookworm-slim AS deps
 WORKDIR /app
-
 RUN corepack enable && corepack prepare pnpm@10.12.1 --activate
 
-# 复制 workspace 配置与 lockfile
-COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.json ./
+# 只复制清单文件：改业务代码不会让这一层失效
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./
+COPY packages/types/package.json ./packages/types/
 COPY packages/contracts/package.json ./packages/contracts/
 COPY services/chat/package.json ./services/chat/
+COPY services/user-system/package.json ./services/user-system/
 COPY clients/chat-web/package.json ./clients/chat-web/
+COPY clients/admin-web/package.json ./clients/admin-web/
+# root postinstall = user-system 的 prisma generate + chat 的 db generate，
+# 缺 prisma schema / config 会让 install 阶段失败，所以必须一并就位
+COPY services/chat/prisma.config.ts ./services/chat/prisma.config.ts
+COPY services/chat/prisma ./services/chat/prisma
+COPY services/user-system/prisma.config.ts ./services/user-system/prisma.config.ts
+COPY services/user-system/prisma ./services/user-system/prisma
 
-# 安装所有依赖
 RUN pnpm install --frozen-lockfile
 
-# 复制源码
-COPY packages/contracts ./packages/contracts
-COPY services/chat ./services/chat
+# ── Stage 2: build —— turbo 只构建 chat 及其上游包 ──
+FROM deps AS build
+COPY . .
+# .dockerignore 排掉了宿主机的 **/src/generated/，这里重新生成一次 Prisma Client，
+# 保证 nest build 一定能拿到 src/generated/prisma（否则 dist 编译失败）
+RUN pnpm --filter @autix/chat db:generate
+RUN pnpm run build --filter=@autix/chat
 
-# 构建共享包与后端服务
-RUN pnpm run build --filter=@autix/contracts --filter=@autix/chat
+# ── Stage 3: deploy —— 用 pnpm deploy 产出自包含依赖树 ──
+# 直接 COPY /app/node_modules 会把整个 monorepo 的依赖（含 Next、admin-web）
+# 全搬进运行时，且 pnpm 的软链被 Docker 解引用后还会再复制一份 —— 实测 2.45GB。
+# pnpm deploy 只挑 @autix/chat 自己的依赖、且不带软链，是瘦身的正确做法。
+# --legacy：pnpm 10 起默认只支持 inject-workspace-packages=true 的 workspace，
+# 本项目用的是常规 workspace 链接，需走 legacy 实现。
+FROM build AS deploy
+RUN pnpm deploy --legacy --filter @autix/chat /deployed
 
-FROM node:22-alpine AS runner
-
+# ── Stage 4: runtime —— 只带运行所需产物 ──
+FROM node:22-bookworm-slim AS runtime
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@10.12.1 --activate
+# Prisma 的查询引擎需要 openssl：debian slim 里没装时它会报
+# "failed to detect the libssl/openssl version" 并退化到 openssl-1.1.x，
+# 运行时可能加载不出引擎。migrate deploy 与 PrismaClient 都依赖它。
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
 ENV PORT=4001
 
-COPY --from=builder /app /app
+# 部署产物：自包含的 node_modules（含 prisma CLI，见下方说明）
+COPY --from=deploy /deployed/node_modules ./services/chat/node_modules
+COPY --from=build /app/packages ./packages
+COPY --from=build /app/services/chat/package.json ./services/chat/package.json
+COPY --from=build /app/services/chat/dist ./services/chat/dist
+# 运行时资源：nest 会读取 config/langchain.yaml
+COPY --from=build /app/services/chat/config ./services/chat/config
+# schema + migrations：应用本身不读，但同一个镜像要承担 compose 里 migrate 容器的
+# 职责（跑 prisma migrate deploy），所以必须带上；这也是上面保留 prisma CLI 的原因
+COPY --from=build /app/services/chat/prisma ./services/chat/prisma
+COPY --from=build /app/services/chat/prisma.config.ts ./services/chat/prisma.config.ts
 
 EXPOSE 4001
 
-CMD ["pnpm", "--filter", "@autix/chat", "start:prod"]
+# 打 /ready 而不是 /health：/health 是 liveness（刻意不探依赖，DB 抖动时不该重启容器），
+# /ready 才真探数据库、未就绪返回 503，compose 的 depends_on 依赖它做正确编排。
+# 用 node 自带 fetch 而不是 wget/curl：Debian slim 不预装 wget，Alpine 的 busybox
+# 又没有 curl，依赖 node 最省心且与基础镜像解耦。
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=20s \
+  CMD node -e "fetch('http://localhost:4001/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+CMD ["node", "services/chat/dist/main.js"]

@@ -1,0 +1,44 @@
+# 第十九章：Docker 构建上下文忽略表
+#
+# 两个目的：
+# ① 保护 deps 层的缓存——如果不忽略，Stage 1 的 `COPY . .` 会把宿主机几千个
+#    node_modules / dist / .next 带进上下文，任何一次本地构建产物变动都会让
+#    `pnpm install` 那一层缓存失效。
+# ② 防止敏感信息进镜像——.env 里是真实的数据库连接串与模型密钥，
+#    一旦被 COPY 进镜像层，即使后面删除也能从镜像历史里翻出来。
+
+# ── 依赖与构建产物 ──
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/out
+**/build
+**/coverage
+**/tsconfig.tsbuildinfo
+
+# ── 敏感配置（保留 .env.example 作为部署者清单）──
+**/.env
+**/.env.*
+!**/.env.example
+
+# ── 版本控制与编辑器 ──
+.git
+.gitignore
+**/.DS_Store
+.idea
+.vscode
+
+# ── 测试与文档（镜像内不运行测试）──
+**/test
+**/tests
+**/*.spec.ts
+**/*.test.ts
+**/docs
+**/*.md
+!README.md
+
+# ── 本地产物 ──
+**/uploads
+**/logs
+**/*.log

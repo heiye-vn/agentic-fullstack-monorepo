@@ -1,21 +1,33 @@
-FROM node:22-alpine AS builder
+FROM node:22-bookworm-slim AS builder
+# 第十九章：与 Dockerfile.chat 一致改用 Debian 系。Next 的 sharp 图片优化依赖 glibc，
+# Debian slim 比 Alpine 更稳；且与 alpine 相比不需要额外的 libc 兼容层。
 
 WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@10.12.1 --activate
 
-# 复制 workspace 配置与 lockfile
+# Stage 1: deps —— 只复制清单文件，让 install 层可被 Docker 缓存住
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.json ./
+COPY packages/types/package.json ./packages/types/
 COPY packages/contracts/package.json ./packages/contracts/
 COPY clients/chat-web/package.json ./clients/chat-web/
+COPY clients/admin-web/package.json ./clients/admin-web/
 COPY services/chat/package.json ./services/chat/
+COPY services/user-system/package.json ./services/user-system/
+# root postinstall = user-system 的 prisma generate + chat 的 db generate。
+# 缺任一 workspace 的 manifest 会报 "No projects matched the filters"，
+# 缺 prisma schema / config 会报 "prisma/schema.prisma: file not found" ——
+# 这两条曾让这个镜像从来没真的 build 成功过。
+COPY services/chat/prisma.config.ts ./services/chat/prisma.config.ts
+COPY services/chat/prisma ./services/chat/prisma
+COPY services/user-system/prisma.config.ts ./services/user-system/prisma.config.ts
+COPY services/user-system/prisma ./services/user-system/prisma
 
 # 安装依赖
 RUN pnpm install --frozen-lockfile
 
-# 复制源码
-COPY packages/contracts ./packages/contracts
-COPY clients/chat-web ./clients/chat-web
+# Stage 2: build —— 复制源码并只构建 chat-web 及其上游
+COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_API_BASE_URL=http://localhost:4001
@@ -24,7 +36,7 @@ ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
 # 编译构建
 RUN pnpm run build --filter=@autix/contracts --filter=@autix/chat-web
 
-FROM node:22-alpine AS runner
+FROM node:22-bookworm-slim AS runner
 
 WORKDIR /app
 
