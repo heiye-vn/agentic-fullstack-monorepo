@@ -18,6 +18,7 @@
  * 运行：pnpm exec vitest run test/chapter18-security.spec.ts
  */
 import { describe, it, expect, beforeAll } from 'vitest';
+import { BadRequestException } from '@nestjs/common';
 import { mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -100,6 +101,14 @@ import {
   DataLineageTracker,
   sensitivityRank,
 } from '../src/security/data-flow-guard.js';
+import { AuditLogger, type AuditEvent } from '../src/security/audit-logger.js';
+import { redactApiKey, redactApiKeys, hasSecret, REDACTED } from '../src/security/mask.js';
+import { ZodValidationPipe } from '../src/common/pipes/zod-validation.pipe.js';
+import {
+  ChatMessageSchema,
+  CreateConversationSchema,
+  MAX_MESSAGE_LENGTH,
+} from '../src/conversation/dto/chat-input.schema.js';
 
 // ============================================================================
 // 18.4 Trust Boundary
@@ -1378,6 +1387,212 @@ describe('data-flow-guard — DataLineageTracker', () => {
     const tracker = new DataLineageTracker();
     expect(tracker.checkLineage('lineage-nope', 'web').allowed).toBe(true);
     expect(tracker.size).toBe(0);
+  });
+});
+
+// ============================================================================
+// 18.8 安全审计日志
+// ============================================================================
+
+describe('18.8 audit-logger 安全审计', () => {
+  it('log 自动补时间戳，保留自定义 details', () => {
+    const audit = new AuditLogger();
+    const e = audit.log({
+      eventType: 'tool_invoked',
+      severity: 'info',
+      actor: 'agent-1',
+      target: 'search_knowledge_base',
+      outcome: 'success',
+      details: { inputLength: 42 },
+    });
+    expect(new Date(e.timestamp).getTime()).toBeGreaterThan(0);
+    expect(e.details.inputLength).toBe(42);
+    expect(audit.size).toBe(1);
+  });
+
+  it('被拒绝的工具调用记为 tool_blocked 且升级为 warn', () => {
+    const audit = new AuditLogger();
+    const e = audit.logToolInvocation('delete_requirement', 'agent-1', 'denied');
+    expect(e.eventType).toBe('tool_blocked');
+    expect(e.severity).toBe('warn');
+  });
+
+  it('query 返回副本：外部改不动内部记录（审计的第一要求是不可篡改）', () => {
+    const audit = new AuditLogger();
+    audit.logToolInvocation('t', 'agent-1', 'success', { k: 'v' });
+
+    const [first] = audit.query();
+    first.actor = 'tampered';
+    first.details.k = 'tampered';
+
+    const [again] = audit.query();
+    expect(again.actor).toBe('agent-1');
+    expect(again.details.k).toBe('v');
+  });
+
+  it('details 里的长字符串被截断（审计不是内容仓库）', () => {
+    const audit = new AuditLogger();
+    const e = audit.log({
+      eventType: 'data_access',
+      severity: 'info',
+      actor: 'agent-1',
+      target: 'doc-1',
+      outcome: 'success',
+      details: { blob: 'x'.repeat(1000) },
+    });
+    expect(String(e.details.blob).length).toBeLessThan(300);
+    expect(String(e.details.blob)).toContain('…(+');
+  });
+
+  it('下游 sink 抛错不会把业务拖死', () => {
+    const audit = new AuditLogger(() => {
+      throw new Error('SIEM 挂了');
+    });
+    expect(() => audit.logToolInvocation('t', 'agent-1', 'success')).not.toThrow();
+    expect(audit.size).toBe(1);
+  });
+
+  it('密钥访问只记形状和用途，不记值', () => {
+    const audit = new AuditLogger();
+    const e = audit.logSecretAccess('model-config:cfg-7', 'agent-1', 'resolve_chat_model');
+    expect(e.eventType).toBe('secret_accessed');
+    // details 里没有任何一个字段是密钥本身
+    expect(JSON.stringify(e.details)).not.toContain('sk-');
+    expect(e.details.purpose).toBe('resolve_chat_model');
+  });
+
+  it('Kill Switch 触发与数据流拦截都有专属事件类型', () => {
+    const audit = new AuditLogger();
+    audit.logKillSwitchEngaged('工具调用死循环', 'ops');
+    audit.logDataFlowBlocked('confidential', 'web', 'agent-1');
+
+    expect(audit.countByType().kill_switch_engaged).toBe(1);
+    expect(audit.countByType().data_flow_blocked).toBe(1);
+    expect(audit.query({ severity: 'critical' })).toHaveLength(1);
+  });
+
+  it('按严重程度 / 时间区间 / 操作者过滤', () => {
+    const audit = new AuditLogger();
+    const sink: AuditEvent[] = [];
+    const withSink = new AuditLogger((e) => sink.push(e));
+
+    withSink.logToolInvocation('t', 'agent-1', 'success');
+    withSink.logInjectionDetected(['ignore-instructions'], 128, 'agent-2');
+    expect(sink).toHaveLength(2);
+
+    audit.logToolInvocation('a', 'agent-1', 'success');
+    audit.logToolInvocation('b', 'agent-2', 'success');
+    expect(audit.query({ actor: 'agent-1' })).toHaveLength(1);
+
+    const now = new Date();
+    expect(audit.query({ since: new Date(now.getTime() - 60_000) })).toHaveLength(2);
+    expect(audit.query({ until: new Date(now.getTime() - 60_000) })).toHaveLength(0);
+    expect(audit.query({ limit: 1 })).toHaveLength(1);
+  });
+});
+
+// ============================================================================
+// 18.16 apiKey 对外响应脱敏
+// ============================================================================
+
+describe('18.16 密钥脱敏 — 日志口径与响应口径分开', () => {
+  it('redactApiKey 对外一点都不留，只给 hasApiKey', () => {
+    const out = redactApiKey({ id: 'm1', apiKey: 'sk-abcdefghijklmnop1234' });
+    expect(out.apiKey).toBe(REDACTED);
+    expect(out.hasApiKey).toBe(true);
+    expect(JSON.stringify(out)).not.toContain('abcd');
+  });
+
+  it('没配置时 apiKey 为 null 且 hasApiKey 为 false', () => {
+    const out = redactApiKey({ id: 'm1', apiKey: null });
+    expect(out.apiKey).toBeNull();
+    expect(out.hasApiKey).toBe(false);
+    expect(hasSecret(null)).toBe(false);
+    expect(hasSecret('sk-xxx')).toBe(true);
+  });
+
+  it('两种口径的区别：日志保留 4 位便于核对，响应全打码', () => {
+    const record = { apiKey: 'sk-abcdefghijklmnop1234' };
+    // maskApiKey（日志）保留首尾
+    const forLog = maskApiKey(record).apiKey!;
+    expect(forLog).toContain('***');
+    expect(forLog.startsWith('sk-a')).toBe(true);
+    // redactApiKey（响应）什么都不留
+    expect(redactApiKey(record).apiKey).toBe(REDACTED);
+  });
+
+  it('批量脱敏列表', () => {
+    const list = redactApiKeys([{ apiKey: 'sk-1234567890abcdef' }, { apiKey: null }]);
+    expect(list).toHaveLength(2);
+    expect(list[0].hasApiKey).toBe(true);
+    expect(list[1].hasApiKey).toBe(false);
+  });
+});
+
+// ============================================================================
+// 18.17 输入契约校验
+// ============================================================================
+
+describe('18.17 对话 DTO 校验（zod）', () => {
+  const pipe = new ZodValidationPipe(ChatMessageSchema);
+  const meta = { type: 'body' } as any;
+
+  it('合法输入通过并返回解析结果', () => {
+    const out = pipe.transform({ message: '帮我分析这个需求' }, meta) as any;
+    expect(out.message).toBe('帮我分析这个需求');
+  });
+
+  it('缺 message 被拒', () => {
+    expect(() => pipe.transform({ modelId: 'x' }, meta)).toThrow(BadRequestException);
+  });
+
+  it('空消息被拒', () => {
+    expect(() => pipe.transform({ message: '' }, meta)).toThrow(BadRequestException);
+  });
+
+  it('超长消息被拒（防超长输入打爆 token 预算）', () => {
+    expect(() =>
+      pipe.transform({ message: 'x'.repeat(MAX_MESSAGE_LENGTH + 1) }, meta),
+    ).toThrow(BadRequestException);
+    expect(() =>
+      pipe.transform({ message: 'x'.repeat(MAX_MESSAGE_LENGTH) }, meta),
+    ).not.toThrow();
+  });
+
+  it('类型不对（message 传数字）被拒', () => {
+    expect(() => pipe.transform({ message: 12345 }, meta)).toThrow(BadRequestException);
+  });
+
+  it('校验失败只报字段与规则，不回显用户输入值', () => {
+    const secretInput = 'x'.repeat(50) + 'sk-abcdefghijklmnop1234';
+    try {
+      pipe.transform({ message: secretInput, modelId: 'y'.repeat(200) }, meta);
+      expect.unreachable('应当抛出');
+    } catch (e) {
+      const body = (e as any).getResponse();
+      expect(body.code).toBe('VALIDATION_FAILED');
+      const details = JSON.stringify(body.details);
+      expect(details).toContain('modelId');
+      // 输入原文不能出现在错误信息里（否则变成反射型泄露）
+      expect(details).not.toContain('sk-abcdefghijklmnop1234');
+    }
+  });
+
+  it('未声明的字段被保留而不是悄悄吃掉', () => {
+    const out = pipe.transform(
+      { message: 'hi', extraField: 'keep-me' },
+      meta,
+    ) as any;
+    expect(out.extraField).toBe('keep-me');
+  });
+
+  it('创建会话的 title 有长度上限', () => {
+    const createPipe = new ZodValidationPipe(CreateConversationSchema);
+    expect(() =>
+      createPipe.transform({ title: 'x'.repeat(201) }, meta),
+    ).toThrow(BadRequestException);
+    expect(() => createPipe.transform({ title: '正常标题' }, meta)).not.toThrow();
+    expect(() => createPipe.transform({}, meta)).not.toThrow();
   });
 });
 

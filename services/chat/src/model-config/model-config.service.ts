@@ -7,6 +7,7 @@ import type {
   UpdateModelConfigDto,
 } from './dto/index.js';
 import { encryptSecret, decryptSecret } from '../common/crypto/secret-crypto.js';
+import { redactApiKey, redactApiKeys } from '../security/mask.js';
 
 /**
  * 运行时凭据解析结果
@@ -19,16 +20,11 @@ import { encryptSecret, decryptSecret } from '../common/crypto/secret-crypto.js'
  * 而 findAll / findById 会把整行原样吐给管理接口 —— 等于密钥直接泄露。
  * 新的写入虽然是密文，但一旦 MODEL_CONFIG_SECRET 泄漏，密文同样可读，
  * 所以对外一律不返回真值。
+ *
+ * 第十八章：这里原先是自己拼 `'***'`，与安全模块的脱敏逻辑是两套口径。
+ * 现在复用 `security/mask.ts` 的 `redactApiKey` —— 同一个"对外响应"口径
+ * 全项目只有一处定义，改口径不用翻两个文件。
  */
-function maskSecrets<T extends { apiKey?: string | null }>(
-  config: T,
-): T & { apiKey: string | null; hasApiKey: boolean } {
-  return {
-    ...config,
-    apiKey: config.apiKey ? '***' : null,
-    hasApiKey: !!config.apiKey,
-  };
-}
 
 export interface RuntimeCredentials {
   modelName: string;
@@ -310,13 +306,13 @@ export class ModelConfigService {
     const list = await this.prisma.modelConfig.findMany({
       orderBy: [{ type: 'asc' }, { priority: 'desc' }],
     });
-    return list.map(maskSecrets);
+    return redactApiKeys(list);
   }
 
   /**
    * 按 ID 获取单个模型配置（管理后台用，apiKey 已脱敏）
    */
   async findByIdSafe(id: string) {
-    return maskSecrets(await this.findById(id));
+    return redactApiKey(await this.findById(id));
   }
 }

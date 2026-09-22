@@ -21,6 +21,11 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { CreateConversationDto } from './dto/create-conversation.dto.js';
 import { ChatConversationDto } from './dto/chat-conversation.dto.js';
+import {
+  CreateConversationSchema,
+  ChatMessageSchema,
+} from './dto/chat-input.schema.js';
+import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
 
 @Controller('api/conversations')
 @UseGuards(JwtAuthGuard)
@@ -40,7 +45,8 @@ export class ConversationController {
   @Post()
   async create(
     @CurrentUser('userId') userId: string,
-    @Body() dto: CreateConversationDto,
+    // 第十八章：输入契约校验（title 长度上限）
+    @Body(new ZodValidationPipe(CreateConversationSchema)) dto: CreateConversationDto,
   ) {
     return this.conversationService.create(userId, dto?.title);
   }
@@ -85,7 +91,8 @@ export class ConversationController {
   async chat(
     @Param('id') conversationId: string,
     @CurrentUser('userId') userId: string,
-    @Body() dto: ChatConversationDto,
+    // 第十八章：输入契约校验（message 必填 + 长度上限，防超长输入打爆 token）
+    @Body(new ZodValidationPipe(ChatMessageSchema)) dto: ChatConversationDto,
     @Res() res: Response,
   ) {
     // 会话归属校验必须放在进入 SSE 模式之前：此时响应还没 flushHeaders，
