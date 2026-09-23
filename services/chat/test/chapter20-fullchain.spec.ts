@@ -24,6 +24,16 @@ import {
   runAnalysisGraph,
 } from '../src/llm/graph/requirement-analysis-graph.js';
 import { SearchService } from '../src/document/search.service.js';
+import {
+  getSharedMcpManager,
+  resetSharedMcpManager,
+} from '../src/mcp/mcp-runtime.js';
+import { withMcpTools } from '../src/llm/graph/experts.js';
+import {
+  buildMethodologyBlock,
+  getSharedSkillRuntime,
+  DEFAULT_ANALYSIS_SKILL,
+} from '../src/skills/skills-runtime.js';
 
 const RUN_LLM = process.env.RUN_LLM_FULLCHAIN_TESTS === '1';
 
@@ -187,6 +197,123 @@ describe('20.3 检索上下文真正抵达写报告的节点（行为验证）',
     expect(summaryAgent.invoke).toHaveBeenCalledWith(
       expect.objectContaining({ retrievedContext: retrieved }),
     );
+  });
+});
+
+// ===========================================================================
+// Layer 1：20.4 MCP 接入主链路（零 LLM、确定性；默认 InMemory 传输）
+// ===========================================================================
+
+const fakeTool = (name: string) =>
+  ({ name, invoke: async () => '' }) as any;
+
+describe('20.4 MCP 进程级单例', () => {
+  /**
+   * 注意：这里一律**显式传 enabled**，不依赖宿主的 .env。
+   * vitest 会自动加载 services/chat/.env（第十九章踩过的坑），
+   * 而 .env 里通常还留着旧的 MCP_ENABLED=false —— 显式传参让用例保持确定性。
+   */
+  it('未显式配置时默认启用（空值走默认 true）', async () => {
+    resetSharedMcpManager();
+    vi.stubEnv('MCP_ENABLED', '');
+    try {
+      await expect(getSharedMcpManager()).resolves.not.toBeNull();
+    } finally {
+      vi.unstubAllEnvs();
+      resetSharedMcpManager();
+    }
+  });
+
+  it('装配成功：返回 manager，且重复调用是同一个实例（不会每请求重建连接）', async () => {
+    resetSharedMcpManager();
+    try {
+      const first = await getSharedMcpManager({ enabled: true });
+      const second = await getSharedMcpManager({ enabled: true });
+      expect(first).not.toBeNull();
+      expect(first).toBe(second);
+    } finally {
+      resetSharedMcpManager();
+    }
+  });
+
+  it('工具名保留 req_ / ws_ 前缀（experts 与 Skill allowed-tools 都按这两个前缀挑选）', async () => {
+    resetSharedMcpManager();
+    try {
+      const mcp = await getSharedMcpManager({ enabled: true });
+      const names = (mcp?.getTools() ?? []).map((t: any) => String(t.name));
+      expect(names.length).toBeGreaterThan(0);
+      expect(names.some((n) => n.startsWith('req_'))).toBe(true);
+      expect(names.some((n) => n.startsWith('ws_'))).toBe(true);
+    } finally {
+      resetSharedMcpManager();
+    }
+  });
+
+  it('显式 disabled 时返回 null，调用方按「没有 MCP」降级', async () => {
+    resetSharedMcpManager();
+    await expect(getSharedMcpManager({ enabled: false })).resolves.toBeNull();
+    resetSharedMcpManager();
+  });
+});
+
+describe('20.4 专家工具池是「叠加」而不是「替换」', () => {
+  it('MCP 工具追加到本地工具之后，两者都在', () => {
+    const local = [fakeTool('analyze_completeness')];
+    const mcp = {
+      tools: [
+        fakeTool('req_estimate_complexity'),
+        fakeTool('ws_search_best_practices'),
+        fakeTool('should_not_be_picked'),
+      ],
+    };
+    const names = withMcpTools(local, mcp, ['req_', 'ws_']).map(
+      (t: any) => t.name,
+    );
+    expect(names).toContain('analyze_completeness');
+    expect(names).toContain('req_estimate_complexity');
+    expect(names).toContain('ws_search_best_practices');
+    // 不在前缀白名单里的工具不该混进来
+    expect(names).not.toContain('should_not_be_picked');
+  });
+
+  it('MCP 不可用时原样返回本地工具，不抛错', () => {
+    const local = [fakeTool('analyze_completeness')];
+    expect(withMcpTools(local, undefined, ['req_', 'ws_'])).toEqual(local);
+  });
+});
+
+// ===========================================================================
+// Layer 1：20.5 方法论正文前置注入
+// ===========================================================================
+
+describe('20.5 buildMethodologyBlock', () => {
+  const runtime = () => getSharedSkillRuntime();
+
+  it('读得到需求分析 Skill 的正文，且已剥掉 frontmatter', () => {
+    const r = runtime();
+    expect(r).not.toBeNull();
+    const block = buildMethodologyBlock(
+      DEFAULT_ANALYSIS_SKILL,
+      r!.registry,
+    );
+    expect(block).toContain('分析方法论');
+    expect(block).toContain('需求分析 Skill');
+    expect(block).not.toContain('allowed-tools:');
+  });
+
+  it('技能不存在时返回空串，而不是抛错阻塞主链路', () => {
+    const r = runtime()!;
+    expect(buildMethodologyBlock('skill-that-does-not-exist', r.registry)).toBe(
+      '',
+    );
+  });
+
+  it('正文过长会截断并在末尾标记，不把 prompt 撑爆', () => {
+    const r = runtime()!;
+    const block = buildMethodologyBlock(DEFAULT_ANALYSIS_SKILL, r.registry, 200);
+    expect(block).toContain('方法论已截断');
+    // 标题行本身不算在内，200 字的正文 + 截断标记
+    expect(block.length).toBeLessThan(400);
   });
 });
 

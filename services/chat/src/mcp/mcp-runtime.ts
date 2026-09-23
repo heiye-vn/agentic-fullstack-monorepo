@@ -24,7 +24,14 @@ export const REQ_TOOL_PREFIX = 'req_';
 export const WS_TOOL_PREFIX = 'ws_';
 
 export interface McpRuntimeOptions {
-  /** 显式开关；不给则读 MCP_ENABLED，默认关闭（保持第九章行为不变） */
+  /**
+   * 显式开关；不给则读 MCP_ENABLED。
+   *
+   * 第二十章 20.4：**默认改为开启**（原为 false）。理由：默认走 InMemoryTransport，
+   * 两个内置 Server 都是进程内纯计算，无网络、无子进程、不花 token；
+   * 且 connectAll 失败只会让 createMcpManager 返回 null，主链路自动降级。
+   * 想回到第十二章「未接 MCP」的行为：MCP_ENABLED=false。
+   */
   enabled?: boolean;
   /** 传输方式：memory（默认）| stdio */
   transport?: 'memory' | 'stdio';
@@ -94,7 +101,14 @@ let sharedInit: Promise<MCPManager | null> | null = null;
 /**
  * 进程级共享的 MCPManager
  *
- * 两个内置 Server 是进程内的纯计算逻辑，没必要每次请求都重新连接一遍。
+ * 第二十章 20.4 的接线点是这里，不要照搬 autix 的 `mcp-bootstrap.ts`：
+ *   1. 本项目这里早已经是**进程级幂等单例**（sharedInit 缓存的是 Promise），
+ *      autix 那边是从来没接进生产，才需要新建 bootstrap 文件；
+ *   2. autix 用 `prefix: ''` 保持原始工具名，是为了过第十八章的白名单。
+ *      本项目反而是**按前缀挑选**：experts.ts 的 withMcpTools 认的是 `req_` / `ws_`，
+ *      skill 的 allowed-tools 也照这两个前缀声明。改成空前缀会让整套挑选逻辑静默失效。
+ *   3. 本默认 InMemoryTransport，无需 fork 子进程，启动期预热几乎零成本。
+ *
  * 未启用 MCP 时返回 null，调用方按 null 走第九章原有行为。
  */
 export function getSharedMcpManager(
@@ -119,7 +133,7 @@ export function resetSharedMcpManager(): void {
 export async function createMcpManager(
   opts: McpRuntimeOptions = {},
 ): Promise<MCPManager | null> {
-  const enabled = opts.enabled ?? envFlag('MCP_ENABLED', false);
+  const enabled = opts.enabled ?? envFlag('MCP_ENABLED', true);
   if (!enabled) return null;
 
   const manager = new MCPManager();

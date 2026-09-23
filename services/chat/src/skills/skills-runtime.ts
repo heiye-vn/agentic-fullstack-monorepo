@@ -103,6 +103,48 @@ export function buildSkillIndexPrompt(registry: SkillRegistry): string {
 }
 
 /**
+ * 第二十章 20.5：把某个 Skill 的**方法论正文**拼成可前置注入的上下文块。
+ *
+ * 与第十三章已有的两种注入方式互补，三种分别解决不同问题：
+ *   - indexPrompt（L1）：只列 name + description，让 Agent 知道"有这个技能" —— 成本极低
+ *   - load_skill 工具（L2）：Agent 自己判断需要时加载正文 —— 按需、省 token
+ *   - 本函数（确定性层）：对主链路每轮无条件带上正文 —— 不赌 Agent 这一次会不会调用工具
+ *
+ * 前两种都依赖模型「想起去做」，第三种保证下限：需求分析这条主链路上，
+ * 就算模型一次 load_skill 都没调，报告也应当按照既定框架产出。
+ * 代价是每轮固定 token 开销，所以带 maxChars 上限兜底（默认 8000 字符）。
+ *
+ * 与前两种方法共用同一个 registry：技能资产只有一份，不存在"注入的正文和工具加载的不一致"。
+ */
+export function buildMethodologyBlock(
+  skillName: string,
+  registry: SkillRegistry,
+  maxChars = DEFAULT_METHODOLOGY_MAX_CHARS,
+): string {
+  if (!registry.has(skillName)) return '';
+  try {
+    const loaded = registry.readSkill(skillName);
+    const body = (loaded.body ?? '').trim();
+    if (!body) return '';
+    const clipped =
+      body.length > maxChars ? `${body.slice(0, maxChars)}\n…（方法论已截断）` : body;
+    return `## 分析方法论（Skill: ${loaded.definition?.name ?? skillName}）\n${clipped}`;
+  } catch {
+    // 资产读不了就降级为不注入，主链路照常，绝不因为缺方法论而让对话失败
+    return '';
+  }
+}
+
+/** 20.5 方法论正文的字符上限，防止 SKILL.md 写得过长时把 prompt 撑爆。 */
+export const DEFAULT_METHODOLOGY_MAX_CHARS = 8000;
+
+/**
+ * 20.5：需求分析主链路默认前置注入的 Skill 名。
+ * 抽出常量是为了让「谁是默认方法论」这一处在代码里只有一个答案。
+ */
+export const DEFAULT_ANALYSIS_SKILL = 'requirement-analysis';
+
+/**
  * 按 allowed-tools 组装工具栈
  *
  * load_skill 永远在列（它是 Skill 机制的入口，不由 SKILL.md 声明）。
@@ -183,7 +225,14 @@ export function createSkillRuntime(
 
 let shared: SkillRuntime | null | undefined;
 
-/** 进程级共享实例：Skill 资产是静态的，没必要每次请求重新扫盘 */
+/**
+ * 进程级共享实例：Skill 资产是静态的，没必要每次请求重新扫盘
+ *
+ * ⚠️ **opts 只在首次调用生效**（缓存命中后不再重算）。工具栈要混合第十二章的 MCP 工具
+ * （教程 13.9.1），所以第一次调用必须把 mcpTools 带上，否则缓存会被固化成
+ * 「没有 MCP 工具」的版本，技能声明的 req_ / ws_ 前缀工具永久缺失。
+ * AppModule.onApplicationBootstrap 里就是按「先 MCP、后 Skills」的顺序预热的。
+ */
 export function getSharedSkillRuntime(
   opts: SkillRuntimeOptions = {},
 ): SkillRuntime | null {

@@ -18,7 +18,12 @@ import type {
   ExpertSkillDeps,
 } from '../llm/graph/experts.js';
 import { getSharedMcpManager } from '../mcp/mcp-runtime.js';
-import { buildSkillToolSet, getSharedSkillRuntime } from '../skills/skills-runtime.js';
+import {
+  buildMethodologyBlock,
+  buildSkillToolSet,
+  getSharedSkillRuntime,
+  DEFAULT_ANALYSIS_SKILL,
+} from '../skills/skills-runtime.js';
 import type { SkillTraceCollector } from '../skills/skill-trace.js';
 import { ArtifactService } from '../artifact/artifact.service.js';
 import { UIActionParser, type UIContext } from './ui-action.parser.js';
@@ -383,6 +388,26 @@ export class ChatStreamService {
         indexPrompt: skillRuntime.indexPrompt,
         traces: built.traces,
       };
+    }
+
+    // ── 第二十章 20.5：方法论正文前置注入 ─────────────────────────
+    // RAG 补「知道什么」（业务事实），Skills 补「怎么做」（分析章法），两者叠加互补。
+    // 复用 20.3 建好的 retrievedContext 通道：写报告的 actorNode 与四个专家都能受益，
+    // 不需要为方法论再单独开一条数据流。
+    //
+    // 注意别把「无相关参考文档」这个占位串留在块里 —— 那会让模型读到一句自相矛盾的指示。
+    if (skillRuntime) {
+      const methodology = buildMethodologyBlock(
+        DEFAULT_ANALYSIS_SKILL,
+        skillRuntime.registry,
+      );
+      if (methodology) {
+        const hasRag =
+          retrievedContext && retrievedContext !== '无相关参考文档';
+        retrievedContext = hasRag
+          ? `${methodology}\n\n${retrievedContext}`
+          : methodology;
+      }
     }
 
     // ── 编排管道流式输出 ────────────────────────────────────────
