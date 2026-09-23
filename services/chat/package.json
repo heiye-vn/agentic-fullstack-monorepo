@@ -29,6 +29,7 @@
     "deepagent:orchestrator": "npx tsx scripts/run-deepagent-orchestrator-demo.ts",
     "graph:mermaid": "npx tsx scripts/print-mermaid.ts",
     "observability:demo": "npx tsx scripts/run-observability-demo.ts",
+    "fullchain:demo": "npx tsx scripts/run-fullchain-demo.ts",
   "sandbox:demo": "npx tsx scripts/run-sandbox-demo.ts",
   "hitl:demo": "npx tsx scripts/run-hitl-approval-demo.ts",
     "eval:seed": "npx tsx scripts/seed-eval-corpus.ts",

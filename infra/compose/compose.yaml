@@ -6,9 +6,13 @@
 #   docker compose ps           # 观察 healthcheck 状态
 #
 # 启动顺序由 healthcheck 串联：
-#   postgres 健康 → migrate 跑完退出 → chat 启动并就绪 → chat-web 启动
+#   postgres 健康 → (migrate / migrate-user-system / seed-user-system) 跑完退出
+#                 → chat 与 user-system 启动并就绪 → chat-web 启动
 # 任何一环失败，后续服务都不会起来。这比 depends_on 的默认行为
 # （只等容器进程启动、不等真正就绪）可靠得多。
+#
+# 第二十章 20.8 补了 user-system 一整条链：浏览器 E2E 要真实登录，
+# 而登录接口在 user-system（4002），第十九章的 compose 里没有它。
 #
 # 注意：postgres 刻意不映射到宿主机端口。本机 5432 通常已被 compose.dev.yaml 的
 # autix-postgres 占用；容器间走 compose 内部网络用 5432 即可。
@@ -26,6 +30,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 infra/compose/.env 中设置 POSTGRES_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data
+      # 第二十章：POSTGRES_DB 只能建一个库，autix_rbac 由这个初始化脚本补。
+      # 只在数据卷为空（首次初始化）时执行，重建容器不会重复建库。
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       # 用 pg_isready 而不是 tcp 探活：容器进程起来 ≠ PostgreSQL 能接受连接
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-autix_chat}"]
@@ -71,6 +78,62 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-autix_chat}?schema=public
     restart: "no"
 
+  # ── 第二十章 20.8：user-system 一整条链（E2E 需要真实登录）────────────
+  # 两个服务各有独立的库，所以 user-system 的迁移不能复用 chat 的 migrate 容器。
+  migrate-user-system:
+    build:
+      context: ../..
+      dockerfile: infra/compose/Dockerfile.user-system
+    command: sh -c "cd /app/services/user-system && ./node_modules/.bin/prisma migrate deploy"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${RBAC_DB:-autix_rbac}?schema=public
+    restart: "no"
+
+  # seed 建出 admin / Admin123! 等基础账号。E2E 用的就是它们，
+  # 所以这个容器跑完是 Layer 3 能登录的前提（对应 K8s 的 initContainer 语义）。
+  seed-user-system:
+    build:
+      context: ../..
+      dockerfile: infra/compose/Dockerfile.user-system
+    command: sh -c "cd /app/services/user-system && ./node_modules/.bin/prisma db seed"
+    depends_on:
+      migrate-user-system:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${RBAC_DB:-autix_rbac}?schema=public
+    restart: "no"
+
+  user-system:
+    build:
+      context: ../..
+      dockerfile: infra/compose/Dockerfile.user-system
+    depends_on:
+      postgres:
+        condition: service_healthy
+      seed-user-system:
+        condition: service_completed_successfully
+    environment:
+      PORT: "4002"
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${RBAC_DB:-autix_rbac}?schema=public
+      JWT_SECRET: ${JWT_SECRET:?请在 infra/compose/.env 中设置 JWT_SECRET}
+    ports:
+      - "4002:4002"
+    restart: unless-stopped
+    healthcheck:
+      # 注意语义：user-system 只有 /health（不探依赖），没有 /ready。
+      # 这里只证明进程活着；数据库就绪由上游 init 容器的完成条件保证。
+      test:
+        ["CMD", "node", "-e",
+         "fetch('http://localhost:4002/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
   chat:
     build:
       context: ../..
@@ -107,13 +170,22 @@ services:
       dockerfile: infra/compose/Dockerfile.web
       args:
         NEXT_PUBLIC_API_BASE_URL: "http://localhost:4001"
+        # 第二十章：前端真正读的是这两个变量（lib/api.ts），第十九章只传了
+        # NEXT_PUBLIC_API_BASE_URL，靠的是前端默认值恰好也对。显式传进去，
+        # 免得默认值一改就静默连错。
+        NEXT_PUBLIC_CHAT_API_URL: "http://localhost:4001"
+        NEXT_PUBLIC_USER_API_URL: "http://localhost:4002/api/v1"
     depends_on:
       chat:
+        condition: service_healthy
+      user-system:
         condition: service_healthy
     environment:
       PORT: "3002"
       HOSTNAME: "0.0.0.0"
       NEXT_PUBLIC_API_BASE_URL: "http://localhost:4001"
+      NEXT_PUBLIC_CHAT_API_URL: "http://localhost:4001"
+      NEXT_PUBLIC_USER_API_URL: "http://localhost:4002/api/v1"
     ports:
       - "3002:3002"
     restart: unless-stopped

@@ -134,6 +134,84 @@ jobs:
           name: eval-report
           path: services/chat/src/eval/reports/
 
+  # ── nightly / 手动：浏览器级满血链路（Layer 3，release gate）──────────────
+  # 与 eval job 同级：真浏览器 + 真服务 + 真 LLM，慢且花钱，绝不进每次 PR。
+  # 守的是「整条链路能不能通」，不是「某个函数对不对」—— 后者由 ci job 的单测覆盖。
+  browser-e2e:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+      POSTGRES_PASSWORD: postgres
+      JWT_SECRET: ${{ secrets.JWT_SECRET || 'ci-e2e-jwt-secret' }}
+      POSTGRES_DB: autix_chat
+      RBAC_DB: autix_rbac
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enable pnpm (corepack)
+        run: corepack enable && corepack prepare pnpm@10.12.1 --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # @playwright/test 刻意不写进根 devDependencies：一旦写进去而 lockfile 没同步，
+      # 上面那条 --frozen-lockfile 会直接失败，把整个 ci job 一起拖挂。
+      # 所以按需装，并显式放宽 lockfile（CI 里 pnpm 默认 frozen）。
+      - name: Install Playwright (Chromium only)
+        run: |
+          pnpm add -D -w @playwright/test --no-frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+
+      # 只起 chat-web：compose 会按 depends_on 把 chat、user-system、seed、
+      # 两个 migrate 和 postgres 全部按条件串起来，qdrant / ragas 则不会启动。
+      # （后者与本次回归无关，白白多 build 两个镜像不值得。）
+      - name: Start stack
+        run: docker compose -f infra/compose/compose.yaml up --build -d chat-web
+
+      # compose 的 healthcheck 只覆盖到容器层；这里再在宿主机侧探一次真实端口，
+      # 避免"容器 healthy 但端口还没转发好"就开跑导致第一轮必失败。
+      - name: Wait for stack readiness
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:4001/ready >/dev/null \
+               && curl -fsS http://localhost:4002/health >/dev/null \
+               && curl -fsS http://localhost:3002/ >/dev/null; then
+              echo "stack is up after $((i*5))s"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::stack did not become ready in 300s"
+          docker compose -f infra/compose/compose.yaml ps
+          exit 1
+
+      - name: Run browser E2E
+        run: RUN_BROWSER_E2E=1 pnpm exec playwright test
+
+      - name: Dump compose logs
+        if: failure()
+        run: docker compose -f infra/compose/compose.yaml logs --no-color > compose-e2e.log 2>&1 || true
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-e2e-report
+          path: |
+            playwright-report/
+            docs/images/ch20/
+            compose-e2e.log
+          if-no-files-found: ignore
+
+      - name: Stop stack
+        if: always()
+        run: docker compose -f infra/compose/compose.yaml down -v
+
   # ── 仅 main push 且 ci 通过后：构建并推送镜像到 GHCR ──
   docker:
     if: github.event_name == 'push'

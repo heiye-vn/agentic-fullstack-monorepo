@@ -1,0 +1,83 @@
+# infra/compose/Dockerfile.user-system — @autix/user-system 的 monorepo 多阶段构建
+#
+# 第二十章 20.8 才补这个镜像：浏览器 E2E 要用真实账号登录，而登录走的是
+# user-system（4002）。第十九章的 compose 只有 chat + chat-web，
+# 前端登录页点下去必然连不上 —— 这一层是为 Layer 3 准备的。
+#
+# 与 Dockerfile.chat 的两处关键差异：
+#   ① **argon2 是原生模块**（密码哈希）：pnpm install 阶段会走 node-gyp 编译，
+#      Debian slim 里没有 python3 / make / g++ 会直接失败。这与 chat 侧的
+#      onnxruntime 属于同一类问题 —— build 期才暴露、本地永远看不出来。
+#   ② user-system 只有 /health（不探依赖），没有 /ready。HEALTHCHECK 仍打 /health，
+#      但要清楚语义：它只证明进程活着。数据库就绪由编排顺序保证 ——
+#      migrate-user-system → seed-user-system → user-system 三段
+#      service_completed_successfully 串起来。
+
+# ── Stage 1: deps —— 只装依赖（manifest 不变即命中缓存）──
+FROM node:22-bookworm-slim AS deps
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@10.12.1 --activate
+
+# argon2 的 node-gyp 编译链；openssl 是 Prisma 查询引擎所需。
+# 只装在这一层，不会进 runtime（见 Stage 4 重新装 openssl 的那一步）。
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 make g++ openssl \
+  && rm -rf /var/lib/apt/lists/*
+
+# 只复制清单文件：改业务代码不会让这一层失效
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./
+COPY packages/types/package.json ./packages/types/
+COPY packages/contracts/package.json ./packages/contracts/
+COPY services/chat/package.json ./services/chat/
+COPY services/user-system/package.json ./services/user-system/
+COPY clients/chat-web/package.json ./clients/chat-web/
+COPY clients/admin-web/package.json ./clients/admin-web/
+# root postinstall 要对两个服务都跑 prisma generate，缺 schema / config 会让 install 失败
+COPY services/chat/prisma.config.ts ./services/chat/prisma.config.ts
+COPY services/chat/prisma ./services/chat/prisma
+COPY services/user-system/prisma.config.ts ./services/user-system/prisma.config.ts
+COPY services/user-system/prisma ./services/user-system/prisma
+
+RUN pnpm install --frozen-lockfile
+
+# ── Stage 2: build —— turbo 只构建 user-system 及其上游包 ──
+FROM deps AS build
+COPY . .
+# .dockerignore 排掉了宿主机的 src/generated/，这里重新生成一次 Prisma Client
+RUN pnpm --filter @autix/user-system prisma:generate
+RUN pnpm run build --filter=@autix/user-system
+
+# ── Stage 3: deploy —— 用 pnpm deploy 产出自包含依赖树（同 Dockerfile.chat）──
+FROM build AS deploy
+RUN pnpm deploy --legacy --filter @autix/user-system /deployed
+
+# ── Stage 4: runtime —— 只带运行所需产物 ──
+FROM node:22-bookworm-slim AS runtime
+WORKDIR /app
+
+# argon2 的 .node 产物已在 Stage 1 编译好并随 node_modules 复制过来，
+# 这里只需要 openssl（Prisma 查询引擎）
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
+
+ENV NODE_ENV=production
+ENV PORT=4002
+
+COPY --from=deploy /deployed/node_modules ./services/user-system/node_modules
+COPY --from=build /app/packages ./packages
+COPY --from=build /app/services/user-system/package.json ./services/user-system/package.json
+COPY --from=build /app/services/user-system/dist ./services/user-system/dist
+# schema + migrations + seed：应用本身不读前两者，但同一个镜像还要承担 compose 里
+# migrate-user-system / seed-user-system 两个 init 容器的职责，所以必须带上
+COPY --from=build /app/services/user-system/prisma ./services/user-system/prisma
+COPY --from=build /app/services/user-system/prisma.config.ts ./services/user-system/prisma.config.ts
+
+EXPOSE 4002
+
+# 注意语义：/health 不探数据库，只说明进程活着。
+# 数据库就绪由上游 init 容器的 service_completed_successfully 保证。
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=15s \
+  CMD node -e "fetch('http://localhost:4002/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+CMD ["node", "services/user-system/dist/main.js"]

@@ -165,7 +165,10 @@ describe('ConversationController E2E / API Tests', () => {
       .post(`/api/conversations/${createdConvId}/chat`)
       .set('Authorization', `Bearer ${user1Token}`)
       .send({ message: '你好，请帮我生成一个功能' })
-      .expect(201);
+      // 20.7：SSE 响应刻意改回 200（NestJS 的 @Post 默认是 201）。
+      // 201 会让部分反向代理/浏览器按「非 2xx 常规响应」处理而不及时 flush，
+      // 首字延迟明显变长。前端只认 content-type，不认状态码，所以改它是安全的。
+      .expect(200);
 
     expect(res.headers['content-type']).toContain('text/event-stream');
     expect(res.text).toContain('markdown');
