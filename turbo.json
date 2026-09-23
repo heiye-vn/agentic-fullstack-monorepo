@@ -10,6 +10,11 @@
     },
     "test": {
       "dependsOn": ["^build"],
+      // Turborepo 2.x 起 envMode 默认是 strict：没在这里声明的环境变量
+      // 不会传给任务进程。CI 的 `DATABASE_URL=... pnpm turbo run test`
+      // 如果不声明，测试进程里 DATABASE_URL 就是 undefined，
+      // PrismaService 会静默退回硬编码的本地口令，报成难以定位的 P1000。
+      "env": ["DATABASE_URL"],
       "outputs": []
     },
     "lint": {

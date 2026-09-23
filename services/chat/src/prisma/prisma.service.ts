@@ -8,10 +8,16 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   private readonly logger = new Logger(PrismaService.name);
 
   constructor() {
-    const pool = new Pool({
-      connectionString:
-        process.env.DATABASE_URL || 'postgresql://postgres:postgres123@localhost:5432/autix_chat?schema=public',
-    });
+    // 第十九章踩坑：这里曾经回退到硬编码的本地开发口令。环境变量没配时，
+    // 它不会报「缺配置」，而是拿错口令去连库，表现为 Prisma P1000
+    // AuthenticationFailed —— CI 上为此排查了很久。缺配置就必须显式失败。
+    const connectionString = process.env.DATABASE_URL;
+    if (!connectionString) {
+      throw new Error(
+        'DATABASE_URL is not set. 请在环境变量中配置数据库连接串（参考 services/chat/.env.example）。',
+      );
+    }
+    const pool = new Pool({ connectionString });
     const adapter = new PrismaPg(pool);
     super({ adapter });
   }
