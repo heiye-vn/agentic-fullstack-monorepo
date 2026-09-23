@@ -272,7 +272,9 @@ export class ChatStreamService {
     }> = [];
 
     try {
-      const searchResults = await this.searchService.similaritySearch(
+      // 第二十章 20.2：改走统一入口 search()（retrieval.mode 默认 hybrid = 向量+BM25+重排），
+      // 它内部已包含失败降级与 8s 硬超时：检索拖不垮 SSE 主链路，最差返回空数组。
+      const searchResults = await this.searchService.search(
         text,
         userId,
         config.retrieval?.topK ?? 4,

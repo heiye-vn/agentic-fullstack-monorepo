@@ -311,6 +311,18 @@ export const RequirementAnalysisState = Annotation.Root({
     reducer: (_, next) => next ?? '',
     default: () => '',
   }),
+  /**
+   * 第二十章 20.3：知识库检索结果（RAG 上下文）。
+   *
+   * 此前本项目的 State **压根没有这个字段** —— 编排层把检索结果作为入参对象的一个 key
+   * 传给了图，但 LangGraph 只会保留 Annotation 里声明过的 channel，未声明的 key 直接被丢弃。
+   * 结果是 actorNode（写报告）和四个专家节点在类型上、在运行时都拿不到它，
+   * 「检索了但不影响报告」在这里比 autix 更彻底：不是没消费，是压根没落到 State 上。
+   */
+  retrievedContext: Annotation<string | undefined>({
+    reducer: (_, next) => next,
+    default: () => undefined,
+  }),
   // 第九章 9.2: 多专家分析结果字段与激活专家列表
   functionalAnalysis: Annotation<string>({
     reducer: (prev, next) => (next && next.trim() ? next : (prev ?? '')),
@@ -929,6 +941,28 @@ export const CriticReviewSchema = z.object({
 export type CriticReview = z.infer<typeof CriticReviewSchema>;
 
 /**
+ * 第二十章 20.3：把 RAG 检索内容拼成一段可注入 prompt 的「参考资料」块。
+ *
+ * 修复历史 bug：检索结果早就写进了 state.retrievedContext，但生成报告的 actorNode
+ * 和四个专家的 agentNode 都**从不读它** —— 检索到的资料只作为 metadata 回给前端，
+ * 模型其实根本没看见（「检索了但不影响报告」）。
+ *
+ * 占位符必须过滤：主链路在检索为空或超时时会用占位文本兜底，若不拦截，
+ * 就会把「无相关参考文档」当成真实资料写进 prompt，反而干扰模型判断。
+ * 本项目存在两种占位写法（chat-stream 的与当时的 graph 默认值），一并拦掉。
+ */
+const EMPTY_CONTEXT_PLACEHOLDERS = [
+  '无相关参考文档',
+  '本次分析未检索到相关参考文档。',
+];
+
+export function buildRetrievedContextBlock(retrievedContext?: string): string {
+  const ctx = (retrievedContext ?? '').trim();
+  if (!ctx || EMPTY_CONTEXT_PLACEHOLDERS.includes(ctx)) return '';
+  return `\n\n## 参考资料（来自知识库检索）\n${ctx}\n请优先依据以上资料作答，资料未覆盖处再用通用知识，不要编造资料中没有的事实。`;
+}
+
+/**
  * Critic-Refine 子图：生成初版报告 (actorNode)
  */
 export async function actorNode(
@@ -957,7 +991,9 @@ export async function actorNode(
       analysis: analysisContent,
       riskResult: riskContent,
       risk: riskContent,
-      retrievedContext: '本次分析未检索到相关参考文档。',
+      // 20.3：原来这里写死占位串，等于 mock 链路永远看不到检索内容
+      retrievedContext:
+        state.retrievedContext ?? '本次分析未检索到相关参考文档。',
     });
 
     return {
@@ -968,6 +1004,8 @@ export async function actorNode(
   }
 
   const input = extractInputText(state) || (state as any).input || '';
+  // 20.3：把检索到的参考资料挂进写报告的 prompt（此前完全没有这一步）
+  const contextBlock = buildRetrievedContextBlock(state.retrievedContext);
   const response = await model.invoke([
     new SystemMessage(`你是资深需求分析师。根据分析和风险评估生成综合报告。
 
@@ -982,7 +1020,7 @@ export async function actorNode(
 - 使用 Markdown 标题（## 和 ###）
 - 关键信息用粗体或列表
 - 排期必须标明依赖关系
-- 冲突分析必须包含解决方案，不能只描述问题`),
+- 冲突分析必须包含解决方案，不能只描述问题${contextBlock}`),
     new HumanMessage(`原始需求：${input}
 
 提取结果：${typeof state.extracted === 'string' ? state.extracted : JSON.stringify(state.extracted ?? {})}

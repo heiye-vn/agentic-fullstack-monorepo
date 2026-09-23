@@ -17,6 +17,13 @@ retrieval:
   scoreThreshold: 0.75
   # Embedding 模型标识
   embeddingModel: text-embedding-3-small
+  # 检索策略：simple = 纯向量；hybrid = 向量 + BM25 多召回 → RRF 融合 → embedding 重排
+  # （第二十章 20.2，默认 hybrid；改回 simple 即可完全退回原有行为）
+  mode: hybrid
+  # 检索整体超时（毫秒）。检索是"锦上添花"，绝不能拖垮主链路：
+  # embedding 模型首次下载、向量库不可达等场景下会「挂起」而不是抛错，
+  # try/catch 挡不住挂起，只能靠硬超时兜底。超时即降级为空上下文，主链路继续
+  timeoutMs: 8000
 
 tools:
   # 是否启用 Web 搜索工具

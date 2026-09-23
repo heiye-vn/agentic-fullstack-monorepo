@@ -5,6 +5,7 @@ import { z } from 'zod';
 import {
   RequirementAnalysisState,
   extractInputText,
+  buildRetrievedContextBlock,
 } from './requirement-analysis-graph.js';
 import {
   searchRequirementTool,
@@ -68,9 +69,14 @@ export function createExpertSubGraph(opts: ExpertOptions) {
           ? state.clarified
           : JSON.stringify(state.clarified ?? {});
       const rawInput = extractInputText(state) || (state as any).input || '';
+      // 第二十章 20.3：专家同 actorNode 一样消费检索内容。
+      // 此前 state.retrievedContext 只在 meta 帧回给前端，从没进过专家的 prompt，
+      // 于是「检索了但专家分析不受影响」。注入逻辑统一走共享 helper，
+      // 避免今后「改了这里、漏了那里」的漂移。
+      const contextBlock = buildRetrievedContextBlock(state.retrievedContext);
 
       const response = await modelWithTools.invoke([
-        { role: 'system', content: systemPrompt },
+        { role: 'system', content: systemPrompt + contextBlock },
         {
           role: 'user',
           content: `已澄清的需求：${clarifiedStr}\n\n原始输入：${rawInput}`,

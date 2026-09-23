@@ -19,6 +19,18 @@ export interface RetrievalConfig {
   topK: number;
   scoreThreshold: number;
   embeddingModel: string;
+  /**
+   * 检索模式：simple = 纯向量；hybrid = 向量 + BM25 多召回再重排（第二十章 20.2，默认 hybrid）。
+   */
+  mode?: 'simple' | 'hybrid';
+  /**
+   * 检索整体超时（毫秒）。
+   *
+   * 20.2 的承诺是"检索失败不炸主链路"，但 try/catch 只能挡「失败」，挡不住「挂起」——
+   * embedding 模型首次下载、向量库不可达又无限重试时，检索会无限期阻塞，把整条 SSE 主链拖死。
+   * 因此 SearchService 会给整个检索套一层硬超时：超时即降级为空上下文。默认 8000ms。
+   */
+  timeoutMs?: number;
 }
 
 export interface ToolsConfig {
