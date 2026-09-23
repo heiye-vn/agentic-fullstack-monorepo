@@ -64,6 +64,22 @@ export class MessageService {
   }
 
   /**
+   * 第二十章 20.7：取**最近** `take` 条消息，按时间正序返回。
+   *
+   * 与 getHistory（取最旧 limit 条）方向相反：多轮对话只需要尾巴上那几轮，
+   * 取全量再截断会在长会话上白烧 token，还可能超上下文窗口。
+   * 实现是先按 createdAt 倒序取 take 条、再 reverse 成正序。
+   */
+  async getRecentHistory(conversationId: string, take: number) {
+    const rows = await this.prisma.message.findMany({
+      where: { conversationId },
+      orderBy: { createdAt: 'desc' },
+      take,
+    });
+    return rows.reverse();
+  }
+
+  /**
    * 将会话历史转换为 LangChain 标准 BaseMessage 数组
    *
    * 角色映射：

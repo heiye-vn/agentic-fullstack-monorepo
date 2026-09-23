@@ -34,6 +34,8 @@ import {
   getSharedSkillRuntime,
   DEFAULT_ANALYSIS_SKILL,
 } from '../src/skills/skills-runtime.js';
+import { detectLongChain } from '../src/llm/agents/orchestrator.service.js';
+import { buildChatHistoryBlock } from '../src/conversation/chat-stream.service.js';
 
 const RUN_LLM = process.env.RUN_LLM_FULLCHAIN_TESTS === '1';
 
@@ -314,6 +316,59 @@ describe('20.5 buildMethodologyBlock', () => {
     expect(block).toContain('方法论已截断');
     // 标题行本身不算在内，200 字的正文 + 截断标记
     expect(block.length).toBeLessThan(400);
+  });
+});
+
+// ===========================================================================
+// Layer 1：20.6 长链路由判定（纯函数、零 LLM）
+// ===========================================================================
+
+describe('20.6 detectLongChain', () => {
+  it('多工单输入（≥2 个不同 REQ）路由到 DeepAgent', () => {
+    expect(detectLongChain('评估 REQ-001/REQ-002/REQ-003 的总体影响')).toBe(true);
+    expect(detectLongChain('REQ-1 和 REQ-2 有冲突吗')).toBe(true);
+  });
+
+  it('单需求 / 单个 REQ / 重复同一 REQ 都走主图', () => {
+    expect(detectLongChain('加个登录功能')).toBe(false);
+    expect(detectLongChain('看下 REQ-001 的状态')).toBe(false);
+    expect(detectLongChain('REQ-001 又是 REQ-001')).toBe(false);
+  });
+
+  it('大小写与连字符差异视为同一工单（去重后再数）', () => {
+    expect(detectLongChain('req001 和 REQ-001 是一回事')).toBe(false);
+    expect(detectLongChain('req001 和 REQ-002 一起排期')).toBe(true);
+  });
+});
+
+// ===========================================================================
+// Layer 1：20.7 对话历史注入
+// ===========================================================================
+
+describe('20.7 buildChatHistoryBlock', () => {
+  it('没有历史时返回空串，不改变原始输入', () => {
+    expect(buildChatHistoryBlock([])).toBe('');
+  });
+
+  it('按 USER/ASSISTANT 渲染角色并带上轮次小节', () => {
+    const block = buildChatHistoryBlock([
+      { role: 'USER', content: '加个企业微信登录' },
+      { role: 'ASSISTANT', content: '好的，需求已记录' },
+    ]);
+    expect(block).toContain('## 对话历史');
+    expect(block).toContain('用户：加个企业微信登录');
+    expect(block).toContain('助手：好的，需求已记录');
+    expect(block).toContain('## 当前问题');
+  });
+
+  it('历史块拼在当前问题之前，顺序不能颠倒', () => {
+    const block = buildChatHistoryBlock([
+      { role: 'USER', content: '上一轮问题' },
+    ]);
+    const composed = `${block}这一轮问题`;
+    expect(composed.indexOf('上一轮问题')).toBeLessThan(
+      composed.indexOf('这一轮问题'),
+    );
   });
 });
 

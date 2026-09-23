@@ -29,6 +29,22 @@ export interface ToUIResponseOptions {
 }
 
 /**
+ * 20.6：长链判定 —— 输入里出现 ≥2 个不同工单编号（REQ-xxx）视为长链，走 DeepAgent。
+ *
+ * 刻意做成**纯函数、零 LLM、只看显式信号**：判错的代价不对称且都不小 ——
+ * 误判为长链 → 又慢又贵；误判为短链 → 长任务被塞进单需求主图，可能上下文超窗。
+ * 所以这里只认用户明写出来的多工单信号，不做任何模糊推断。
+ * 纯函数还带来一个好处：Layer 1 确定性测试可以直接断言，不需要模型。
+ */
+export function detectLongChain(input: string): boolean {
+  const reqIds = input.match(/REQ-?\d+/gi) ?? [];
+  const distinct = new Set(
+    reqIds.map((s) => s.toUpperCase().replace(/-/g, '')),
+  );
+  return distinct.size >= 2;
+}
+
+/**
  * 工作流单步执行记录
  */
 export interface OrchestrationStep {
@@ -694,5 +710,111 @@ export class OrchestratorService {
         };
       }
     }
+  }
+
+  /**
+   * 20.6：DeepAgent 长链分支 —— 跨多工单的复杂任务走第十五章的 DeepAgent，
+   * 并把它的 streamEvents(v2) 翻译成与 streamOrchestrate **完全相同**的
+   * OrchestratorStreamEvent，让下游（落库 / 产物 / token 统计 / 前端渲染）
+   * 完全不需要知道这一轮走的是哪条路。
+   *
+   * 与 autix 的两处不同：
+   *   1. **不传 checkpointer**。autix 传了 MemorySaver，于是必须再解决 thread_id
+   *      （它为此专门修过一次：带 checkpointer 却没 thread_id 会报错）。
+   *      本项目 DeepAgent 的 checkpointer 是可选的（不传就不启用），索性不启用 ——
+   *      MemorySaver 是进程内的，跨进程本来就恢复不了，生产要真恢复得换 PostgresSaver，
+   *      那会新增 LangGraph 的 checkpoint 表，属于第十五章标注的「需拍板的数据模型变更」。
+   *   2. **中间 token 不推给前端**。DeepAgent 的 on_chat_model_stream 混着子 Agent 的
+   *      过程输出，全推出去会让落库内容变成一堆中间草稿。这里只在工具起止时发
+   *      agent_start / agent_end，最后把**最终报告分片**推出去 ——
+   *      既保留流式观感，落库内容又正好等于最终报告。
+   */
+  async *streamDeepAgent(
+    input: string,
+    retrievedContext: string,
+    model: any,
+  ): AsyncGenerator<OrchestratorStreamEvent> {
+    const { createDeepOrchestrator } = await import(
+      '../deepagent/deep-orchestrator.service.js'
+    );
+    const agent = createDeepOrchestrator({ model });
+
+    yield {
+      type: 'log',
+      error: '检测到跨工单长链任务，路由到 DeepAgent 编排',
+    };
+
+    const hasRag = retrievedContext && retrievedContext !== '无相关参考文档';
+    const ctx = hasRag
+      ? `${input}\n\n（参考资料）\n${retrievedContext}`
+      : input;
+
+    type DeepFinalState = { messages?: Array<{ content: unknown }> };
+    let step = 0;
+    let rootRunId: string | undefined;
+    let finalState: DeepFinalState | null = null;
+
+    for await (const ev of agent.streamEvents(
+      { messages: [{ role: 'user', content: ctx }] },
+      { version: 'v2' },
+    )) {
+      if (!rootRunId && ev.event === 'on_chain_start') rootRunId = ev.run_id;
+
+      switch (ev.event) {
+        case 'on_tool_start': {
+          step++;
+          yield {
+            type: 'agent_start',
+            agent: ev.name ?? 'deepOrchestrator',
+            step,
+            totalSteps: 0, // 长链任务步数不可预知，前端按无分母渲染
+          };
+          break;
+        }
+        case 'on_tool_end': {
+          yield {
+            type: 'agent_end',
+            agent: ev.name ?? 'deepOrchestrator',
+            step,
+          };
+          break;
+        }
+        case 'on_chain_end': {
+          // 只看根链路的结束事件，子 Agent 的 on_chain_end 不算完成
+          if (ev.run_id === rootRunId) {
+            finalState = (ev.data as { output?: DeepFinalState })?.output ?? null;
+          }
+          break;
+        }
+      }
+    }
+
+    const messages = finalState?.messages ?? [];
+    const report = messages.length
+      ? String(messages[messages.length - 1].content ?? '')
+      : '';
+
+    if (!report) {
+      yield {
+        type: 'error',
+        error: 'DeepAgent 长链未产出内容',
+      };
+      return;
+    }
+
+    // 分片推送：前端仍有逐字观感，落库内容又正好是最终报告
+    const CHUNK_SIZE = 40;
+    for (let i = 0; i < report.length; i += CHUNK_SIZE) {
+      yield {
+        type: 'token',
+        content: report.slice(i, i + CHUNK_SIZE),
+        agent: 'deepOrchestrator',
+      };
+    }
+
+    yield {
+      type: 'complete',
+      result: { status: 'completed', usedAgents: ['deepOrchestrator'] },
+    };
   }
 }

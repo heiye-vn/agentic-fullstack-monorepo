@@ -9,6 +9,7 @@ import {
   Res,
   UseGuards,
   Logger,
+  HttpStatus,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { ConversationService } from './conversation.service.js';
@@ -26,6 +27,14 @@ import {
   ChatMessageSchema,
 } from './dto/chat-input.schema.js';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
+
+/**
+ * 20.8：SSE 心跳间隔（毫秒）。
+ *
+ * 取值要小于常见中间层的空闲超时（nginx proxy_read_timeout 默认 60s、多数云 LB 60~120s），
+ * 又不能太密以免白耗带宽。15s 是业界常用取值，给两层代理留足余量。
+ */
+const SSE_KEEPALIVE_INTERVAL_MS = 15_000;
 
 @Controller('api/conversations')
 @UseGuards(JwtAuthGuard)
@@ -107,6 +116,11 @@ export class ConversationController {
       conversation.title === '新对话' ||
       conversation.title === '新会话';
 
+    // 20.8：SSE 是流式响应，按约定返回 200 OK，覆盖 NestJS 对 POST 默认的 201。
+    // 这不是洁癖 —— 第二十章的浏览器 E2E 断言 chat 响应状态码是 200，
+    // 而且 201 会误导调用方以为「创建了一个资源」。
+    res.statusCode = HttpStatus.OK;
+
     // SSE 响应头：no-transform + X-Accel-Buffering 关掉中间层缓冲，否则 token 会攒批
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -124,6 +138,19 @@ export class ConversationController {
         })}\n\n`,
       );
     };
+
+    /**
+     * 20.8：SSE keep-alive 心跳。
+     *
+     * 满血链路里长链任务（DeepAgent）、Critic-Refine 循环、专家并行这些环节，
+     * 可能几十秒只产出结构化结果而不吐一个 token —— 长时间零字节会被浏览器或中间代理
+     * 判定为空闲连接直接断掉（artifact_created 还没发出去就已经掉线）。
+     * 每 15 秒发一行以 ':' 开头的注释行：SSE 规范里客户端会忽略它，
+     * 但足以让连接上的每一层都确认链路还活着。stream 结束在 finally 里清理。
+     */
+    const keepAlive = setInterval(() => {
+      if (!res.writableEnded && !res.destroyed) res.write(': keepalive\n\n');
+    }, SSE_KEEPALIVE_INTERVAL_MS);
 
     try {
       for await (const frame of this.chatStreamService.stream({
@@ -147,6 +174,7 @@ export class ConversationController {
         },
       });
     } finally {
+      clearInterval(keepAlive);
       if (!res.writableEnded) res.end();
     }
   }

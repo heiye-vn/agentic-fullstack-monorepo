@@ -6,7 +6,10 @@ import { RunnableMemoryService } from '../llm/memory/runnable-memory.service.js'
 import { ModelConfigService } from '../model-config/model-config.service.js';
 import { createChatModel } from '../llm/model.factory.js';
 import { loadLangChainConfig } from '../config/load-langchain-config.js';
-import { OrchestratorService } from '../llm/agents/orchestrator.service.js';
+import {
+  OrchestratorService,
+  detectLongChain,
+} from '../llm/agents/orchestrator.service.js';
 import { UIFlowService } from '../llm/ui-protocol/ui-flow.service.js';
 import type { UIAction } from '../llm/ui-protocol/ui-types.js';
 import { SearchService } from '../document/search.service.js';
@@ -49,6 +52,36 @@ export interface ChatStreamFrame {
   payload: unknown;
 }
 
+/**
+ * 20.7：对话历史注入的轮数。N 太小多轮记不住，N 太大烧 token 还可能超上下文窗口；
+ * 多数需求分析对话在 5 轮内收敛，故默认 5。更长的深度对话应上第十章的摘要式记忆
+ * （早期历史压成摘要 + 最近几轮原文），这里先把「带原文的最近 N 轮」打通。
+ */
+const CHAT_HISTORY_TURNS = 5;
+
+/**
+ * 20.7：把最近若干条消息渲染成可前置注入的「对话历史」块。
+ *
+ * 抽成纯函数是为了可测 ——「历史有没有被正确带上」不能靠读代码判断，
+ * 得能直接断言渲染结果（第二十章的原则：用行为验证而非代码验证）。
+ * 没有历史时返回空串，让拼接处保持「有就加前缀、没有就原样」的自然语义。
+ */
+export function buildChatHistoryBlock(
+  recent: Array<{ role: string; content: string }>,
+): string {
+  if (recent.length === 0) return '';
+  const lines = recent
+    .map(
+      (m) => `${m.role === MessageRole.USER ? '用户' : '助手'}：${m.content}`,
+    )
+    .join('\n');
+  return (
+    '## 对话历史（最近若干轮，用于理解上下文与代词指代）\n' +
+    lines +
+    '\n\n## 当前问题\n'
+  );
+}
+
 /** Agent 名 → 前端进度条显示名 */
 const AGENT_DISPLAY_NAMES: Record<string, string> = {
   triageAgent: '意图分诊',
@@ -66,6 +99,8 @@ const AGENT_DISPLAY_NAMES: Record<string, string> = {
   securityExpert: '安全专家',
   complianceExpert: '合规专家',
   aggregatorAgent: '结论聚合',
+  // 20.6：DeepAgent 长链分支（跨工单任务）
+  deepOrchestrator: '长链编排',
 };
 
 @Injectable()
@@ -265,6 +300,17 @@ export class ChatStreamService {
     // 先取历史（此时不含本轮），再落库本轮用户消息，避免本轮被重复带入上下文
     const history =
       await this.messageService.getHistoryAsLangChainMessages(conversationId);
+
+    // ── 第二十章 20.7：多轮对话历史注入 ───────────────────────────
+    // 必须在落库本轮用户消息**之前**取，否则会把当前这轮自己也当成历史带进去。
+    // 主图（streamOrchestrate）此前每轮只喂当前消息、完全不带历史，
+    // 于是「它支持哪些支付方式？」「那改成微信呢？」这类代词指代必然答错。
+    const recent = await this.messageService.getRecentHistory(
+      conversationId,
+      CHAT_HISTORY_TURNS * 2, // N 轮 ≈ N*2 条（user + assistant）
+    );
+    const historyBlock = buildChatHistoryBlock(recent);
+
     await this.messageService.addMessage(conversationId, MessageRole.USER, text);
 
     // ── RAG 语义检索：失败不阻断，降级为无文档上下文 ──────────────
@@ -417,13 +463,25 @@ export class ChatStreamService {
     let orchestratorError: Error | null = null;
 
     try {
-      const stream = this.orchestratorService.streamOrchestrate(text, {
-        retrievedContext,
-        model,
-        rag: ragDeps,
-        mcp: mcpDeps,
-        skills: skillsDeps,
-      });
+      // 20.7：历史块拼在编排输入最前面（text 本身不变，落库与标题提炼仍用原文）
+      const orchestratorInput = `${historyBlock}${text}`;
+
+      // 20.6：长链路由。判定只看**原始 text**，不看拼了历史的输入 ——
+      // 否则历史里出现过的工单编号会让本轮被误判成长链。
+      // 两条分支产出同一种 OrchestratorStreamEvent，下面的处理逻辑完全复用。
+      const stream = detectLongChain(text)
+        ? this.orchestratorService.streamDeepAgent(
+            orchestratorInput,
+            retrievedContext,
+            model,
+          )
+        : this.orchestratorService.streamOrchestrate(orchestratorInput, {
+            retrievedContext,
+            model,
+            rag: ragDeps,
+            mcp: mcpDeps,
+            skills: skillsDeps,
+          });
 
       for await (const event of stream) {
         switch (event.type) {
@@ -545,7 +603,12 @@ export class ChatStreamService {
     );
 
     // ── 编排产出研究报告时自动生成产物 ────────────────────────────
-    if (usedAgents.includes('summaryAgent') && content.trim().length > 0) {
+    // 20.6：DeepAgent 长链的最终报告同样要落成产物（它走的是 deepOrchestrator
+    // 而不是 summaryAgent 这一步，判定条件必须一起放开，否则长链任务永远没有产物面板）
+    const producedReport =
+      usedAgents.includes('summaryAgent') ||
+      usedAgents.includes('deepOrchestrator');
+    if (producedReport && content.trim().length > 0) {
       try {
         const title = await this.artifactService.generateTitle(content);
         const artifact = await this.artifactService.upsertArtifact({
